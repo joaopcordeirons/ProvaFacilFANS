@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProvaFácil FANS — Testar Extração de Texto</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --border: #e2e2e6;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --accent: #2f6feb;
+    --accent-hover: #2558c4;
+    --error: #d92c2c;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.5rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+  }
+  .wrap { width: 100%; max-width: 640px; }
+  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+  p.subtitle { color: var(--muted); margin: 0 0 1.75rem; font-size: 0.9rem; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .tipo-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .tipo-toggle button {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .tipo-toggle button.ativo {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .drop-area {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 2rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .drop-area.arrastando { border-color: var(--accent); background: #eef3fe; }
+  .drop-area p { margin: 0.25rem 0; color: var(--muted); font-size: 0.9rem; }
+  .drop-area strong { color: var(--text); }
+  input[type="file"] { display: none; }
+
+  #nomeArquivo {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text);
+    text-align: center;
+    min-height: 1.2em;
+  }
+
+  button.enviar {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.7rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+  button.enviar:hover { background: var(--accent-hover); }
+  button.enviar:disabled { background: #b7c6e8; cursor: not-allowed; }
+
+  .status { font-size: 0.85rem; margin-top: 0.75rem; text-align: center; min-height: 1.2em; }
+  .status.erro { color: var(--error); }
+  .status.ok { color: #1a7a3d; }
+
+  .resultado h2 {
+    font-size: 0.95rem;
+    margin: 0 0 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
+  textarea {
+    width: 100%;
+    min-height: 260px;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    resize: vertical;
+  }
+  .copiar {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    border-radius: 6px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Extração de Texto — ProvaFácil FANS</h1>
+    <p class="subtitle">Envie um PDF ou DOCX de questão e veja o texto extraído pela API.</p>
+
+    <div class="card">
+      <div class="tipo-toggle">
+        <button type="button" id="btnPdf" class="ativo">PDF</button>
+        <button type="button" id="btnDocx">DOCX</button>
+      </div>
+
+      <div class="drop-area" id="dropArea">
+        <p><strong>Clique para escolher</strong> ou arraste o arquivo aqui</p>
+        <p id="tipoAceito">Aceita: .pdf</p>
+        <input type="file" id="inputArquivo" accept=".pdf">
+      </div>
+      <div id="nomeArquivo"></div>
+
+      <button class="enviar" id="btnEnviar" disabled>Extrair texto</button>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card resultado oculto" id="cardResultado">
+      <h2>
+        Texto extraído
+        <button class="copiar" id="btnCopiar">Copiar</button>
+      </h2>
+      <div class="meta" id="meta"></div>
+      <textarea id="textoExtraido" readonly></textarea>
+    </div>
+  </div>
+
+<script>
+  const API_BASE = window.location.origin;
+
+  const btnPdf = document.getElementById('btnPdf');
+  const btnDocx = document.getElementById('btnDocx');
+  const dropArea = document.getElementById('dropArea');
+  const inputArquivo = document.getElementById('inputArquivo');
+  const nomeArquivoEl = document.getElementById('nomeArquivo');
+  const tipoAceitoEl = document.getElementById('tipoAceito');
+  const btnEnviar = document.getElementById('btnEnviar');
+  const statusEl = document.getElementById('status');
+  const cardResultado = document.getElementById('cardResultado');
+  const metaEl = document.getElementById('meta');
+  const textoEl = document.getElementById('textoExtraido');
+  const btnCopiar = document.getElementById('btnCopiar');
+
+  let tipo = 'pdf'; // 'pdf' | 'docx'
+  let arquivoSelecionado = null;
+
+  function definirTipo(novoTipo) {
+    tipo = novoTipo;
+    const ehPdf = tipo === 'pdf';
+    btnPdf.classList.toggle('ativo', ehPdf);
+    btnDocx.classList.toggle('ativo', !ehPdf);
+    inputArquivo.accept = ehPdf ? '.pdf' : '.docx';
+    tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : 'Aceita: .docx';
+    limparSelecao();
+  }
+
+  function limparSelecao() {
+    arquivoSelecionado = null;
+    nomeArquivoEl.textContent = '';
+    btnEnviar.disabled = true;
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+  }
+
+  function selecionarArquivo(arquivo) {
+    const extensaoEsperada = tipo === 'pdf' ? '.pdf' : '.docx';
+    if (!arquivo.name.toLowerCase().endsWith(extensaoEsperada)) {
+      statusEl.textContent = `Selecione um arquivo ${extensaoEsperada}.`;
+      statusEl.className = 'status erro';
+      return;
+    }
+    arquivoSelecionado = arquivo;
+    nomeArquivoEl.textContent = arquivo.name;
+    btnEnviar.disabled = false;
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+  }
+
+  btnPdf.addEventListener('click', () => definirTipo('pdf'));
+  btnDocx.addEventListener('click', () => definirTipo('docx'));
+
+  dropArea.addEventListener('click', () => inputArquivo.click());
+  inputArquivo.addEventListener('change', (e) => {
+    if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
+  });
+
+  ['dragenter', 'dragover'].forEach((evento) => {
+    dropArea.addEventListener(evento, (e) => {
+      e.preventDefault();
+      dropArea.classList.add('arrastando');
+    });
+  });
+  ['dragleave', 'drop'].forEach((evento) => {
+    dropArea.addEventListener(evento, (e) => {
+      e.preventDefault();
+      dropArea.classList.remove('arrastando');
+    });
+  });
+  dropArea.addEventListener('drop', (e) => {
+    const arquivo = e.dataTransfer.files[0];
+    if (arquivo) selecionarArquivo(arquivo);
+  });
+
+  btnEnviar.addEventListener('click', async () => {
+    if (!arquivoSelecionado) return;
+
+    btnEnviar.disabled = true;
+    statusEl.textContent = 'Extraindo...';
+    statusEl.className = 'status';
+    cardResultado.classList.add('oculto');
+
+    const formData = new FormData();
+    formData.append('arquivo', arquivoSelecionado);
+
+    const endpoint = tipo === 'pdf' ? '/api/questoes/extrair-pdf' : '/api/questoes/extrair-docx';
+
+    try {
+      const resposta = await fetch(API_BASE + endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || 'Erro ao extrair o texto.');
+      }
+
+      statusEl.textContent = 'Extração concluída.';
+      statusEl.className = 'status ok';
+
+      const partesMeta = [`Arquivo: ${dados.nomeArquivo}`];
+      if (typeof dados.paginas === 'number') partesMeta.push(`${dados.paginas} página(s)`);
+      if (dados.avisos && dados.avisos.length) partesMeta.push(`${dados.avisos.length} aviso(s) de conversão`);
+      metaEl.textContent = partesMeta.join(' · ');
+
+      textoEl.value = dados.texto || '(nenhum texto encontrado)';
+      cardResultado.classList.remove('oculto');
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'status erro';
+    } finally {
+      btnEnviar.disabled = false;
+    }
+  });
+
+  btnCopiar.addEventListener('click', () => {
+    textoEl.select();
+    document.execCommand('copy');
+    btnCopiar.textContent = 'Copiado!';
+    setTimeout(() => (btnCopiar.textContent = 'Copiar'), 1500);
+  });
+</script>
+</body>
+</html>

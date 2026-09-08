@@ -1,0 +1,19 @@
+{
+  "name": "provafacil-extrair-texto",
+  "version": "1.0.0",
+  "description": "API para extração de texto de PDF/DOCX de questões - ProvaFácil FANS",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1",
+    "mammoth": "^1.12.2",
+    "multer": "^2.3.0",
+    "pdf-parse": "^1.1.1"
+  }
+}
