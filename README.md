@@ -24,6 +24,7 @@ Com o servidor rodando, abra a URL/porta correspondente no navegador
 Dá pra escolher PDF ou DOCX, arrastar o arquivo (ou clicar pra selecionar) e
 ver o texto extraído, com botão de copiar.
 
+<<<<<<< HEAD
 ## Recebendo questões por e-mail (Gmail)
 
 1. Na conta do Gmail que vai receber as questões, ative a **verificação em
@@ -46,6 +47,8 @@ caixa naquele momento. Se quiser verificação automática periódica, dá pra
 adicionar um `setInterval` chamando `verificarNovosEmails()` no `server.js`,
 ou agendar via `cron` batendo no endpoint de tempos em tempos.
 
+=======
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 ## Endpoints
 
 ### `POST /api/questoes/extrair-pdf`
@@ -86,6 +89,7 @@ curl -F "arquivo=@questao.docx" http://localhost:3001/api/questoes/extrair-docx
 convertidos (ex.: estilos não mapeados) — útil para logs, não costuma
 impedir a extração.
 
+<<<<<<< HEAD
 ### `POST /api/questoes/verificar-email`
 
 - Sem parâmetros. Requer `GMAIL_USER`/`GMAIL_APP_PASSWORD` no `.env`.
@@ -108,6 +112,8 @@ impedir a extração.
 }
 ```
 
+=======
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 ## Deploy em VPS (produção)
 
 ```bash

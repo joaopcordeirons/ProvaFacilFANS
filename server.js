@@ -1,15 +1,25 @@
 // server.js
+<<<<<<< HEAD
 // API para extrair texto de PDF/DOCX (upload) e de e-mails recebidos (Gmail).
 // Endpoints principais: POST /api/questoes/extrair-pdf, extrair-docx,
 // e POST /api/questoes/verificar-email
 
 require('dotenv').config();
+=======
+// API mínima para extrair texto de arquivos PDF enviados via upload.
+// Endpoint principal: POST /api/questoes/extrair-pdf
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+<<<<<<< HEAD
 const { extrairTextoPdf, extrairTextoDocx } = require('./extratores');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
+=======
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -57,12 +67,21 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
+<<<<<<< HEAD
     const { texto, paginas } = await extrairTextoPdf(req.file.buffer);
 
     return res.json({
       nomeArquivo: req.file.originalname,
       paginas,
       texto,
+=======
+    const resultado = await pdfParse(req.file.buffer);
+
+    return res.json({
+      nomeArquivo: req.file.originalname,
+      paginas: resultado.numpages,
+      texto: resultado.text.trim(),
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
     });
   } catch (err) {
     console.error('Erro ao extrair PDF:', err.message);
@@ -79,12 +98,21 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
+<<<<<<< HEAD
     const { texto, avisos } = await extrairTextoDocx(req.file.buffer);
 
     return res.json({
       nomeArquivo: req.file.originalname,
       texto,
       avisos,
+=======
+    const resultado = await mammoth.extractRawText({ buffer: req.file.buffer });
+
+    return res.json({
+      nomeArquivo: req.file.originalname,
+      texto: resultado.value.trim(),
+      avisos: resultado.messages.map((m) => m.message),
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
     });
   } catch (err) {
     console.error('Erro ao extrair DOCX:', err.message);
@@ -92,6 +120,7 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
   }
 });
 
+<<<<<<< HEAD
 // Conecta na caixa do Gmail, processa e-mails não lidos e retorna o que
 // foi extraído de cada um (corpo do texto + anexos PDF/DOCX). Cada e-mail
 // processado é marcado como lido, então chamar de novo só traz o que
@@ -112,6 +141,8 @@ app.post('/api/questoes/verificar-email', async (req, res) => {
   }
 });
 
+=======
+>>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 // Tratamento de erro do multer (ex.: arquivo não é PDF, tamanho excedido)
 app.use((err, req, res, next) => {
   if (err) {
