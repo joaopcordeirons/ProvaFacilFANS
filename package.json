@@ -11,14 +11,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-<<<<<<< HEAD
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "imapflow": "^2.0.0",
     "mailparser": "^3.9.23",
-=======
-    "express": "^5.2.1",
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
     "mammoth": "^1.12.2",
     "multer": "^2.3.0",
     "pdf-parse": "^1.1.1"

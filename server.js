@@ -1,25 +1,15 @@
 // server.js
-<<<<<<< HEAD
 // API para extrair texto de PDF/DOCX (upload) e de e-mails recebidos (Gmail).
 // Endpoints principais: POST /api/questoes/extrair-pdf, extrair-docx,
 // e POST /api/questoes/verificar-email
 
 require('dotenv').config();
-=======
-// API mínima para extrair texto de arquivos PDF enviados via upload.
-// Endpoint principal: POST /api/questoes/extrair-pdf
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-<<<<<<< HEAD
 const { extrairTextoPdf, extrairTextoDocx } = require('./extratores');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
-=======
-const pdfParse = require('pdf-parse');
-const mammoth = require('mammoth');
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -59,29 +49,18 @@ app.get('/api/status', (req, res) => {
 });
 
 // Recebe um PDF (campo "arquivo") e retorna o texto extraído.
-// O texto retornado deve poder ser editado pelo professor antes de salvar
-// a questão no banco, conforme previsto no formulário do projeto.
 app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
-<<<<<<< HEAD
     const { texto, paginas } = await extrairTextoPdf(req.file.buffer);
 
     return res.json({
       nomeArquivo: req.file.originalname,
       paginas,
       texto,
-=======
-    const resultado = await pdfParse(req.file.buffer);
-
-    return res.json({
-      nomeArquivo: req.file.originalname,
-      paginas: resultado.numpages,
-      texto: resultado.text.trim(),
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
     });
   } catch (err) {
     console.error('Erro ao extrair PDF:', err.message);
@@ -90,29 +69,18 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
 });
 
 // Recebe um DOCX (campo "arquivo") e retorna o texto extraído.
-// Mesma lógica do endpoint de PDF: o texto volta editável para o professor
-// revisar antes de a questão ser salva no banco.
 app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
-<<<<<<< HEAD
     const { texto, avisos } = await extrairTextoDocx(req.file.buffer);
 
     return res.json({
       nomeArquivo: req.file.originalname,
       texto,
       avisos,
-=======
-    const resultado = await mammoth.extractRawText({ buffer: req.file.buffer });
-
-    return res.json({
-      nomeArquivo: req.file.originalname,
-      texto: resultado.value.trim(),
-      avisos: resultado.messages.map((m) => m.message),
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
     });
   } catch (err) {
     console.error('Erro ao extrair DOCX:', err.message);
@@ -120,11 +88,8 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
   }
 });
 
-<<<<<<< HEAD
 // Conecta na caixa do Gmail, processa e-mails não lidos e retorna o que
-// foi extraído de cada um (corpo do texto + anexos PDF/DOCX). Cada e-mail
-// processado é marcado como lido, então chamar de novo só traz o que
-// chegou depois da última verificação.
+// foi extraído de cada um (corpo do texto + anexos PDF/DOCX).
 app.post('/api/questoes/verificar-email', async (req, res) => {
   if (!credenciaisConfiguradas()) {
     return res.status(500).json({
@@ -141,8 +106,6 @@ app.post('/api/questoes/verificar-email', async (req, res) => {
   }
 });
 
-=======
->>>>>>> 287d4f26d3144aecf0439488ff302f8010b307fd
 // Tratamento de erro do multer (ex.: arquivo não é PDF, tamanho excedido)
 app.use((err, req, res, next) => {
   if (err) {
