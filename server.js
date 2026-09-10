@@ -49,6 +49,8 @@ app.get('/api/status', (req, res) => {
 });
 
 // Recebe um PDF (campo "arquivo") e retorna o texto extraído.
+// O texto retornado deve poder ser editado pelo professor antes de salvar
+// a questão no banco, conforme previsto no formulário do projeto.
 app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
@@ -69,6 +71,8 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
 });
 
 // Recebe um DOCX (campo "arquivo") e retorna o texto extraído.
+// Mesma lógica do endpoint de PDF: o texto volta editável para o professor
+// revisar antes de a questão ser salva no banco.
 app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
@@ -89,7 +93,9 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
 });
 
 // Conecta na caixa do Gmail, processa e-mails não lidos e retorna o que
-// foi extraído de cada um (corpo do texto + anexos PDF/DOCX).
+// foi extraído de cada um (corpo do texto + anexos PDF/DOCX). Cada e-mail
+// processado é marcado como lido, então chamar de novo só traz o que
+// chegou depois da última verificação.
 app.post('/api/questoes/verificar-email', async (req, res) => {
   if (!credenciaisConfiguradas()) {
     return res.status(500).json({
@@ -114,6 +120,13 @@ app.use((err, req, res, next) => {
   next();
 });
 
-app.listen(PORT, () => {
-  console.log(`API de extração de PDF rodando em http://localhost:${PORT}`);
-});
+// Na Vercel (serverless) não existe processo contínuo escutando porta —
+// a própria plataforma invoca `app` como handler a cada requisição.
+// Fora dela (VPS, sua máquina), sobe o servidor normalmente.
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`API de extração de PDF rodando em http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
