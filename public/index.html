@@ -137,6 +137,16 @@
     margin-left: 0.35rem;
   }
   .salvar:disabled { opacity: 0.55; cursor: not-allowed; }
+  .excluir {
+    border: 1px solid #d92c2c;
+    background: #fff5f5;
+    color: #d92c2c;
+    border-radius: 6px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-left: 0.35rem;
+  }
   .oculto { display: none; }
 
   .email-item {
@@ -400,10 +410,21 @@
           <div class="assunto">${escapeHtml(questao.nomeArquivo || 'Questão salva')}</div>
           <div class="remetente">${escapeHtml(questao.criadoEm ? new Date(questao.criadoEm).toLocaleString('pt-BR') : '')}</div>
           <div class="corpo">${escapeHtml(questao.texto || '')}</div>
+          <button class="excluir excluir-questao" data-id="${escapeHtml(questao.id)}">Excluir questão</button>
         </div>
       `).join('') || '<div class="status">Nenhuma questão salva ainda.</div>';
       statusQuestoesEl.textContent = `${dados.questoes.length} questão(ões) carregada(s).`;
       statusQuestoesEl.className = 'status ok';
+      listaQuestoesEl.querySelectorAll('.excluir-questao').forEach((botao) => botao.addEventListener('click', async () => {
+        if (!confirm('Excluir esta questão permanentemente do Firebase?')) return;
+        botao.disabled = true;
+        try {
+          const resposta = await fetch(API_BASE + '/api/questoes/' + encodeURIComponent(botao.dataset.id), { method: 'DELETE' });
+          const erro = await resposta.json();
+          if (!resposta.ok) throw new Error(erro.erro || 'Não foi possível excluir a questão.');
+          carregarQuestoes();
+        } catch (err) { alert(err.message); botao.disabled = false; }
+      }));
     } catch (err) {
       statusQuestoesEl.textContent = err.message;
       statusQuestoesEl.className = 'status erro';
@@ -420,6 +441,17 @@
     const div = document.createElement('div');
     div.textContent = texto;
     return div.innerHTML;
+  }
+
+  async function salvarTexto(texto, tipoOrigem, nomeArquivo) {
+    const resposta = await fetch(API_BASE + '/api/questoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto, tipoOrigem, nomeArquivo }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
+    return dados;
   }
 
   btnVerificarEmail.addEventListener('click', async () => {
@@ -440,10 +472,11 @@
       statusEmailEl.className = 'status ok';
 
       dados.emails.forEach((email) => {
-        const anexosHtml = (email.anexos || []).map((anexo) => `
+        const anexosHtml = (email.anexos || []).map((anexo, indice) => `
           <div class="anexo">
             <div class="anexo-nome">${escapeHtml(anexo.nomeArquivo || 'anexo')}</div>
             <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || '').slice(0, 500))}</div>
+            ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-email="${dados.emails.indexOf(email)}" data-anexo="${indice}">Salvar anexo</button>` : ''}
           </div>
         `).join('');
 
@@ -453,9 +486,29 @@
           <div class="assunto">${escapeHtml(email.assunto || '(sem assunto)')}</div>
           <div class="remetente">${escapeHtml(email.de || '')}</div>
           <div class="corpo">${escapeHtml(email.textoCorpo || '(corpo vazio)')}</div>
+          ${email.textoCorpo ? '<button class="salvar salvar-email-corpo">Salvar corpo</button>' : ''}
+          <button class="excluir remover-email">Remover da tela</button>
           ${anexosHtml}
         `;
         listaEmailsEl.appendChild(item);
+        item.querySelector('.remover-email').addEventListener('click', () => item.remove());
+        item.querySelector('.salvar-email-corpo')?.addEventListener('click', async (evento) => {
+          evento.target.disabled = true;
+          try {
+            await salvarTexto(email.textoCorpo, 'email', email.assunto || 'email');
+            evento.target.textContent = 'Salvo';
+            carregarQuestoes();
+          } catch (err) { alert(err.message); evento.target.disabled = false; }
+        });
+        item.querySelectorAll('.salvar-email-anexo').forEach((botao) => botao.addEventListener('click', async (evento) => {
+          evento.target.disabled = true;
+          const anexo = email.anexos[Number(evento.target.dataset.anexo)];
+          try {
+            await salvarTexto(anexo.texto, anexo.tipo || 'email-anexo', anexo.nomeArquivo || 'anexo');
+            evento.target.textContent = 'Salvo';
+            carregarQuestoes();
+          } catch (err) { alert(err.message); evento.target.disabled = false; }
+        }));
       });
     } catch (err) {
       statusEmailEl.textContent = err.message;

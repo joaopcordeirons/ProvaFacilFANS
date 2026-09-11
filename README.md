@@ -6,7 +6,9 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 
 - Extração de texto de PDF, DOCX e imagens por OCR.
 - Salvamento manual da questão revisada em `POST /api/questoes`.
+- Salvamento do corpo e dos anexos extraídos na seção de verificação de e-mails.
 - Consulta das últimas questões em `GET /api/questoes`.
+- Exclusão de questões em `DELETE /api/questoes/:id`, com confirmação na interface.
 - Importação de mensagens e anexos de uma caixa Gmail via IMAP.
 
 ## Configurando o Firebase
@@ -40,4 +42,5 @@ Abra `http://localhost:3001`. Depois de extrair e revisar uma questão, use **Sa
 - `POST /api/questoes/extrair-imagem`
 - `POST /api/questoes` — corpo JSON: `{ "texto": "...", "tipoOrigem": "pdf", "nomeArquivo": "..." }`
 - `GET /api/questoes?limite=50`
+- `DELETE /api/questoes/:id`
 - `POST /api/questoes/verificar-email`

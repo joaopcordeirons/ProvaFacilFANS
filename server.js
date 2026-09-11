@@ -10,7 +10,7 @@ const multer = require('multer');
 const path = require('path');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
-const { criarQuestao, listarQuestoes } = require('./firebase');
+const { criarQuestao, listarQuestoes, excluirQuestao } = require('./firebase');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -89,6 +89,15 @@ app.get('/api/questoes', async (req, res) => {
     return res.json({ questoes: await listarQuestoes(limite) });
   } catch (err) {
     console.error('Erro ao listar questões:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+app.delete('/api/questoes/:id', async (req, res) => {
+  try {
+    return res.json(await excluirQuestao(req.params.id));
+  } catch (err) {
+    console.error('Erro ao excluir questão:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });

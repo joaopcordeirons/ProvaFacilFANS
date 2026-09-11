@@ -89,4 +89,13 @@ async function listarQuestoes(limite = 50) {
   });
 }
 
-module.exports = { obterFirestore, criarQuestao, listarQuestoes };
+async function excluirQuestao(id) {
+  if (!id || typeof id !== 'string' || id.length > 200) {
+    throw Object.assign(new Error('ID de questão inválido.'), { statusCode: 400 });
+  }
+  const banco = exigirFirestore();
+  await banco.collection('questoes').doc(id).delete();
+  return { id };
+}
+
+module.exports = { obterFirestore, criarQuestao, listarQuestoes, excluirQuestao };
