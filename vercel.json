@@ -3,10 +3,7 @@
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": [
-        "por.traineddata",
-        "eng.traineddata"
-      ]
+      "includeFiles": "*.traineddata"
     }
   },
   "builds": [
