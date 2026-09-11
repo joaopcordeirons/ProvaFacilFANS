@@ -269,7 +269,7 @@
     if (!arquivoSelecionado) return;
 
     btnEnviar.disabled = true;
-    statusEl.textContent = 'Extraindo...';
+    statusEl.textContent = tipo === 'imagem' ? 'Lendo imagem com OCR (a primeira pode demorar mais)...' : 'Extraindo...';
     statusEl.className = 'status';
     cardResultado.classList.add('oculto');
 
@@ -283,7 +283,17 @@
         method: 'POST',
         body: formData,
       });
-      const dados = await resposta.json();
+      const conteudo = await resposta.text();
+      let dados;
+      try {
+        dados = JSON.parse(conteudo);
+      } catch (_) {
+        throw new Error(
+          resposta.status >= 500
+            ? `A Vercel retornou um erro ${resposta.status}. Confira os logs da função. Detalhe: ${conteudo.slice(0, 180)}`
+            : conteudo.slice(0, 180) || 'Resposta inválida do servidor.'
+        );
+      }
 
       if (!resposta.ok) {
         throw new Error(dados.erro || 'Erro ao extrair o texto.');

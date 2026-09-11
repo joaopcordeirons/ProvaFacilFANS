@@ -1,5 +1,14 @@
 {
   "version": 2,
+  "functions": {
+    "server.js": {
+      "maxDuration": 60,
+      "includeFiles": [
+        "por.traineddata",
+        "eng.traineddata"
+      ]
+    }
+  },
   "builds": [
     { "src": "server.js", "use": "@vercel/node" }
   ],
