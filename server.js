@@ -10,6 +10,7 @@ const multer = require('multer');
 const path = require('path');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
+const { criarQuestao, listarQuestoes } = require('./firebase');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -58,6 +59,38 @@ const uploadImagem = multer({
 
 app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', mensagem: 'API de extração de PDF no ar.' });
+});
+
+// Salva o texto revisado pelo professor no Cloud Firestore.
+app.post('/api/questoes', express.json(), async (req, res) => {
+  try {
+    const { texto, tipoOrigem, nomeArquivo, paginas, confianca, avisos } = req.body || {};
+    if (typeof texto !== 'string' || !texto.trim()) {
+      return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
+    }
+
+    const questao = await criarQuestao({
+      texto: texto.trim(), tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+    });
+    return res.status(201).json(questao);
+  } catch (err) {
+    console.error('Erro ao salvar questão:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Lista as questões mais recentes salvas no Cloud Firestore.
+app.get('/api/questoes', async (req, res) => {
+  try {
+    const limiteInformado = Number.parseInt(req.query.limite, 10);
+    const limite = Number.isFinite(limiteInformado)
+      ? Math.min(Math.max(limiteInformado, 1), 100)
+      : 50;
+    return res.json({ questoes: await listarQuestoes(limite) });
+  } catch (err) {
+    console.error('Erro ao listar questões:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
 });
 
 // Recebe um PDF (campo "arquivo") e retorna o texto extraído.

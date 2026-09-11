@@ -126,6 +126,17 @@
     cursor: pointer;
     color: var(--text);
   }
+  .salvar {
+    border: 1px solid #1a7a3d;
+    background: #eefaf1;
+    color: #1a7a3d;
+    border-radius: 6px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-left: 0.35rem;
+  }
+  .salvar:disabled { opacity: 0.55; cursor: not-allowed; }
   .oculto { display: none; }
 
   .email-item {
@@ -170,7 +181,7 @@
     <div class="card resultado oculto" id="cardResultado">
       <h2>
         Texto extraído
-        <button class="copiar" id="btnCopiar">Copiar</button>
+        <span><button class="copiar" id="btnCopiar">Copiar</button><button class="salvar" id="btnSalvar">Salvar questão</button></span>
       </h2>
       <div class="meta" id="meta"></div>
       <textarea id="textoExtraido" readonly></textarea>
@@ -182,6 +193,14 @@
       <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
       <div class="status" id="statusEmail"></div>
       <div id="listaEmails"></div>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:1rem;">Questões salvas</h1>
+      <p class="subtitle" style="margin-bottom:1rem;">Últimas questões persistidas no Cloud Firestore.</p>
+      <button class="enviar" id="btnCarregarQuestoes">Atualizar lista</button>
+      <div class="status" id="statusQuestoes"></div>
+      <div id="listaQuestoes"></div>
     </div>
   </div>
 
@@ -203,6 +222,7 @@
   const metaEl = document.getElementById('meta');
   const textoEl = document.getElementById('textoExtraido');
   const btnCopiar = document.getElementById('btnCopiar');
+  const btnSalvar = document.getElementById('btnSalvar');
 
   let tipo = 'pdf'; // 'pdf' | 'docx' | 'imagem'
   let arquivoSelecionado = null;
@@ -339,6 +359,58 @@
     btnCopiar.textContent = 'Copiado!';
     setTimeout(() => (btnCopiar.textContent = 'Copiar'), 1500);
   });
+
+  btnSalvar.addEventListener('click', async () => {
+    if (!textoEl.value.trim()) return;
+    btnSalvar.disabled = true;
+    statusEl.textContent = 'Salvando no Firebase...';
+    statusEl.className = 'status';
+    try {
+      const resposta = await fetch(API_BASE + '/api/questoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: textoEl.value, tipoOrigem: tipo, nomeArquivo: arquivoSelecionado?.name || null }),
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
+      statusEl.textContent = `Questão salva com sucesso (ID: ${dados.id}).`;
+      statusEl.className = 'status ok';
+      carregarQuestoes();
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'status erro';
+    } finally {
+      btnSalvar.disabled = false;
+    }
+  });
+
+  const btnCarregarQuestoes = document.getElementById('btnCarregarQuestoes');
+  const statusQuestoesEl = document.getElementById('statusQuestoes');
+  const listaQuestoesEl = document.getElementById('listaQuestoes');
+
+  async function carregarQuestoes() {
+    statusQuestoesEl.textContent = 'Carregando...';
+    statusQuestoesEl.className = 'status';
+    try {
+      const resposta = await fetch(API_BASE + '/api/questoes');
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível carregar as questões.');
+      listaQuestoesEl.innerHTML = (dados.questoes || []).map((questao) => `
+        <div class="email-item">
+          <div class="assunto">${escapeHtml(questao.nomeArquivo || 'Questão salva')}</div>
+          <div class="remetente">${escapeHtml(questao.criadoEm ? new Date(questao.criadoEm).toLocaleString('pt-BR') : '')}</div>
+          <div class="corpo">${escapeHtml(questao.texto || '')}</div>
+        </div>
+      `).join('') || '<div class="status">Nenhuma questão salva ainda.</div>';
+      statusQuestoesEl.textContent = `${dados.questoes.length} questão(ões) carregada(s).`;
+      statusQuestoesEl.className = 'status ok';
+    } catch (err) {
+      statusQuestoesEl.textContent = err.message;
+      statusQuestoesEl.className = 'status erro';
+    }
+  }
+
+  btnCarregarQuestoes.addEventListener('click', carregarQuestoes);
 
   const btnVerificarEmail = document.getElementById('btnVerificarEmail');
   const statusEmailEl = document.getElementById('statusEmail');

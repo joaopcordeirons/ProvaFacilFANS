@@ -1,23 +1,43 @@
-# API de Extração de Texto (PDF/DOCX/imagens) — ProvaFácil FANS
+# ProvaFácil FANS — Extração e persistência de questões
 
-Primeiro passo do sistema: recebe um arquivo (questão enviada pelo professor
-em PDF, DOCX ou imagem) e devolve o texto extraído, pronto para o professor
-revisar/editar antes de salvar no banco de questões.
+A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou imagem), extrai o texto para revisão e permite salvar a versão revisada no **Cloud Firestore**, banco de dados do Firebase.
 
-## OCR de imagens
+## Funcionalidades
 
-O endpoint `POST /api/questoes/extrair-imagem` aceita imagens JPG/JPEG, PNG,
-WEBP, GIF, BMP e TIFF de até 10 MB. O texto é reconhecido com OCR em português
-e inglês e a resposta inclui uma estimativa de confiança (`confianca`). A
-interface web também permite selecionar ou arrastar imagens. Anexos desses
-formatos recebidos pelo endpoint de verificação de e-mail também são lidos
-automaticamente.
+- Extração de texto de PDF, DOCX e imagens por OCR.
+- Salvamento manual da questão revisada em `POST /api/questoes`.
+- Consulta das últimas questões em `GET /api/questoes`.
+- Importação de mensagens e anexos de uma caixa Gmail via IMAP.
 
-## Rodando localmente (desenvolvimento)
+## Configurando o Firebase
 
-Porta padrão agora é 80, o que exige privilégio de admin/root. Para testar
-no seu PC sem sudo, use outra porta:
+1. No [Firebase Console](https://console.firebase.google.com/), crie ou selecione um projeto.
+2. Ative o **Cloud Firestore** em modo de produção ou teste, conforme a política de acesso desejada.
+3. Em **Configurações do projeto → Contas de serviço**, gere uma nova chave privada.
+4. No ambiente do servidor, configure `FIREBASE_SERVICE_ACCOUNT_JSON` com o conteúdo JSON da chave em uma única linha. Como alternativa, configure `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY` separadamente.
+5. Nunca envie a chave privada para o navegador, para o Git ou para o arquivo `public/index.html`. O SDK usado é o Firebase Admin SDK, executado somente no servidor.
+
+A coleção criada automaticamente será `questoes`. Cada documento contém `texto`, `tipoOrigem`, `nomeArquivo`, metadados de extração, `criadoEm` e `atualizadoEm`.
+
+Sem as variáveis de Firebase, a aplicação continua iniciando e os endpoints de persistência retornam `503` com uma mensagem de configuração. Isso permite testar a extração antes de conectar um projeto real.
+
+## Rodando localmente
 
 ```bash
 npm install
+cp .env.example .env
+# edite .env e informe as credenciais necessárias
 PORT=3001 npm start
+```
+
+Abra `http://localhost:3001`. Depois de extrair e revisar uma questão, use **Salvar questão**. O botão **Atualizar lista** consulta os documentos mais recentes do Firestore.
+
+## Endpoints principais
+
+- `GET /api/status`
+- `POST /api/questoes/extrair-pdf`
+- `POST /api/questoes/extrair-docx`
+- `POST /api/questoes/extrair-imagem`
+- `POST /api/questoes` — corpo JSON: `{ "texto": "...", "tipoOrigem": "pdf", "nomeArquivo": "..." }`
+- `GET /api/questoes?limite=50`
+- `POST /api/questoes/verificar-email`
