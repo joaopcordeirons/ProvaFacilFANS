@@ -205,6 +205,8 @@
   }
   .editor:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #eef3fe; }
   .editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
+  .status-inline { margin-top: 0.55rem; font-size: 0.8rem; }
+  .status-inline.erro { color: var(--error); }
   .oculto { display: none; }
 
   .email-item {
@@ -558,6 +560,18 @@
     return dados;
   }
 
+  function mostrarErroNoCard(elemento, mensagem) {
+    const card = elemento.closest('.email-item');
+    if (!card) return;
+    let aviso = card.querySelector('.status-inline');
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.className = 'status-inline erro';
+      card.appendChild(aviso);
+    }
+    aviso.textContent = mensagem;
+  }
+
   const editorQuestao = document.getElementById('editorQuestao');
   const statusEditadaEl = document.getElementById('statusEditada');
   document.querySelectorAll('#editorToolbar [data-command]').forEach((botao) => {
@@ -639,7 +653,7 @@
             await salvarTexto(email.textoCorpo, 'email', email.assunto || 'email');
             evento.target.textContent = 'Salvo';
             carregarQuestoes();
-          } catch (err) { alert(err.message); evento.target.disabled = false; }
+          } catch (err) { mostrarErroNoCard(evento.target, err.message); evento.target.disabled = false; }
         });
         item.querySelectorAll('.salvar-email-anexo').forEach((botao) => botao.addEventListener('click', async (evento) => {
           evento.target.disabled = true;
@@ -648,7 +662,7 @@
             await salvarTexto(anexo.texto, anexo.tipo || 'email-anexo', anexo.nomeArquivo || 'anexo');
             evento.target.textContent = 'Salvo';
             carregarQuestoes();
-          } catch (err) { alert(err.message); evento.target.disabled = false; }
+          } catch (err) { mostrarErroNoCard(evento.target, err.message); evento.target.disabled = false; }
         }));
       });
     } catch (err) {
