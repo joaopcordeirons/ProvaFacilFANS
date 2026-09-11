@@ -159,6 +159,8 @@
         <p id="tipoAceito">Aceita: .pdf</p>
         <input type="file" id="inputArquivo" accept=".pdf">
       </div>
+      <button type="button" class="enviar oculto" id="btnTirarFoto" style="background:#fff;color:var(--accent);border:1px solid var(--accent);margin-top:0.6rem;">📷 Tirar foto agora</button>
+      <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none;">
       <div id="nomeArquivo"></div>
 
       <button class="enviar" id="btnEnviar" disabled>Extrair texto</button>
@@ -191,6 +193,8 @@
   const btnImagem = document.getElementById('btnImagem');
   const dropArea = document.getElementById('dropArea');
   const inputArquivo = document.getElementById('inputArquivo');
+  const btnTirarFoto = document.getElementById('btnTirarFoto');
+  const inputFoto = document.getElementById('inputFoto');
   const nomeArquivoEl = document.getElementById('nomeArquivo');
   const tipoAceitoEl = document.getElementById('tipoAceito');
   const btnEnviar = document.getElementById('btnEnviar');
@@ -207,11 +211,14 @@
     tipo = novoTipo;
     const ehPdf = tipo === 'pdf';
     const ehDocx = tipo === 'docx';
+    const ehImagem = tipo === 'imagem';
     btnPdf.classList.toggle('ativo', ehPdf);
     btnDocx.classList.toggle('ativo', ehDocx);
-    btnImagem.classList.toggle('ativo', tipo === 'imagem');
+    btnImagem.classList.toggle('ativo', ehImagem);
     inputArquivo.accept = ehPdf ? '.pdf' : ehDocx ? '.docx' : 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff';
     tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : ehDocx ? 'Aceita: .docx' : 'Aceita: JPG, PNG, WEBP, GIF, BMP ou TIFF';
+    dropArea.querySelector('p strong').textContent = ehImagem ? 'Clique para escolher da galeria' : 'Clique para escolher';
+    btnTirarFoto.classList.toggle('oculto', !ehImagem);
     limparSelecao();
   }
 
@@ -245,6 +252,14 @@
 
   dropArea.addEventListener('click', () => inputArquivo.click());
   inputArquivo.addEventListener('change', (e) => {
+    if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
+  });
+
+  // No celular, o atributo capture="environment" faz o navegador abrir a
+  // câmera traseira direto, em vez de mostrar a galeria — é isso que separa
+  // "tirar uma foto agora" de "escolher um arquivo já existente".
+  btnTirarFoto.addEventListener('click', () => inputFoto.click());
+  inputFoto.addEventListener('change', (e) => {
     if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
   });
 
