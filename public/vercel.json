@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "functions": {
+    "server.js": {
+      "maxDuration": 60,
+      "includeFiles": "*.traineddata"
+    }
+  },
+  "routes": [
+    { "src": "/(.*)", "dest": "server.js" }
+  ]
+}
