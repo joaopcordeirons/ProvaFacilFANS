@@ -12,6 +12,7 @@ const { createWorker } = require('tesseract.js');
 // esse custo. A fila evita duas chamadas simultâneas no mesmo worker.
 let workerPromise;
 let filaOcr = Promise.resolve();
+const TEMPO_MAXIMO_OCR_MS = 45_000;
 
 function obterWorkerOcr() {
   if (!workerPromise) {
@@ -41,8 +42,16 @@ async function extrairTextoDocx(buffer) {
 
 async function extrairTextoImagem(buffer) {
   const trabalho = filaOcr.then(async () => {
-    const worker = await obterWorkerOcr();
-    const resultado = await worker.recognize(buffer);
+    let temporizador;
+    const limite = new Promise((_, rejeitar) => {
+      temporizador = setTimeout(
+        () => rejeitar(new Error('O OCR excedeu o limite de 45 segundos. Tente uma imagem menor ou mais nítida.')),
+        TEMPO_MAXIMO_OCR_MS
+      );
+    });
+    const worker = await Promise.race([obterWorkerOcr(), limite]);
+    const resultado = await Promise.race([worker.recognize(buffer), limite]);
+    clearTimeout(temporizador);
     return {
       texto: resultado.data.text.trim(),
       confianca: Math.round(resultado.data.confidence),
