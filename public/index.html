@@ -145,12 +145,13 @@
 <body>
   <div class="wrap">
     <h1>Extração de Texto — ProvaFácil FANS</h1>
-    <p class="subtitle">Envie um PDF ou DOCX de questão e veja o texto extraído pela API.</p>
+    <p class="subtitle">Envie um PDF, DOCX ou imagem de questão e veja o texto extraído pela API.</p>
 
     <div class="card">
       <div class="tipo-toggle">
         <button type="button" id="btnPdf" class="ativo">PDF</button>
         <button type="button" id="btnDocx">DOCX</button>
+        <button type="button" id="btnImagem">IMAGEM</button>
       </div>
 
       <div class="drop-area" id="dropArea">
@@ -175,7 +176,7 @@
 
     <div class="card">
       <h1 style="font-size:1rem;">Verificar e-mails</h1>
-      <p class="subtitle" style="margin-bottom:1rem;">Busca questões recebidas por e-mail (corpo + anexos PDF/DOCX) e marca como lidas.</p>
+    <p class="subtitle" style="margin-bottom:1rem;">Busca questões recebidas por e-mail (corpo + anexos PDF, DOCX ou imagem) e marca como lidas.</p>
       <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
       <div class="status" id="statusEmail"></div>
       <div id="listaEmails"></div>
@@ -187,6 +188,7 @@
 
   const btnPdf = document.getElementById('btnPdf');
   const btnDocx = document.getElementById('btnDocx');
+  const btnImagem = document.getElementById('btnImagem');
   const dropArea = document.getElementById('dropArea');
   const inputArquivo = document.getElementById('inputArquivo');
   const nomeArquivoEl = document.getElementById('nomeArquivo');
@@ -198,16 +200,18 @@
   const textoEl = document.getElementById('textoExtraido');
   const btnCopiar = document.getElementById('btnCopiar');
 
-  let tipo = 'pdf'; // 'pdf' | 'docx'
+  let tipo = 'pdf'; // 'pdf' | 'docx' | 'imagem'
   let arquivoSelecionado = null;
 
   function definirTipo(novoTipo) {
     tipo = novoTipo;
     const ehPdf = tipo === 'pdf';
+    const ehDocx = tipo === 'docx';
     btnPdf.classList.toggle('ativo', ehPdf);
-    btnDocx.classList.toggle('ativo', !ehPdf);
-    inputArquivo.accept = ehPdf ? '.pdf' : '.docx';
-    tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : 'Aceita: .docx';
+    btnDocx.classList.toggle('ativo', ehDocx);
+    btnImagem.classList.toggle('ativo', tipo === 'imagem');
+    inputArquivo.accept = ehPdf ? '.pdf' : ehDocx ? '.docx' : 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff';
+    tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : ehDocx ? 'Aceita: .docx' : 'Aceita: JPG, PNG, WEBP, GIF, BMP ou TIFF';
     limparSelecao();
   }
 
@@ -220,9 +224,11 @@
   }
 
   function selecionarArquivo(arquivo) {
+    const extensoesImagem = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff'];
     const extensaoEsperada = tipo === 'pdf' ? '.pdf' : '.docx';
-    if (!arquivo.name.toLowerCase().endsWith(extensaoEsperada)) {
-      statusEl.textContent = `Selecione um arquivo ${extensaoEsperada}.`;
+    const valido = tipo === 'imagem' ? extensoesImagem.some((ext) => arquivo.name.toLowerCase().endsWith(ext)) : arquivo.name.toLowerCase().endsWith(extensaoEsperada);
+    if (!valido) {
+      statusEl.textContent = tipo === 'imagem' ? 'Selecione uma imagem JPG, PNG, WEBP, GIF, BMP ou TIFF.' : `Selecione um arquivo ${extensaoEsperada}.`;
       statusEl.className = 'status erro';
       return;
     }
@@ -235,6 +241,7 @@
 
   btnPdf.addEventListener('click', () => definirTipo('pdf'));
   btnDocx.addEventListener('click', () => definirTipo('docx'));
+  btnImagem.addEventListener('click', () => definirTipo('imagem'));
 
   dropArea.addEventListener('click', () => inputArquivo.click());
   inputArquivo.addEventListener('change', (e) => {
@@ -269,7 +276,7 @@
     const formData = new FormData();
     formData.append('arquivo', arquivoSelecionado);
 
-    const endpoint = tipo === 'pdf' ? '/api/questoes/extrair-pdf' : '/api/questoes/extrair-docx';
+    const endpoint = tipo === 'pdf' ? '/api/questoes/extrair-pdf' : tipo === 'docx' ? '/api/questoes/extrair-docx' : '/api/questoes/extrair-imagem';
 
     try {
       const resposta = await fetch(API_BASE + endpoint, {
@@ -288,6 +295,7 @@
       const partesMeta = [`Arquivo: ${dados.nomeArquivo}`];
       if (typeof dados.paginas === 'number') partesMeta.push(`${dados.paginas} página(s)`);
       if (dados.avisos && dados.avisos.length) partesMeta.push(`${dados.avisos.length} aviso(s) de conversão`);
+      if (typeof dados.confianca === 'number') partesMeta.push(`confiança OCR: ${dados.confianca}%`);
       metaEl.textContent = partesMeta.join(' · ');
 
       textoEl.value = dados.texto || '(nenhum texto encontrado)';

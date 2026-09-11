@@ -1,5 +1,5 @@
 // server.js
-// API para extrair texto de PDF/DOCX (upload) e de e-mails recebidos (Gmail).
+// API para extrair texto de PDF/DOCX/imagens (upload) e de e-mails recebidos (Gmail).
 // Endpoints principais: POST /api/questoes/extrair-pdf, extrair-docx,
 // e POST /api/questoes/verificar-email
 
@@ -8,7 +8,7 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const { extrairTextoPdf, extrairTextoDocx } = require('./extratores');
+const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
 
 const app = express();
@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 80;
 app.use(express.static(path.join(__dirname, 'public')));
 
 const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const MIMES_IMAGEM = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
 
 // Armazena o upload em memória (não grava em disco) — bom para arquivos
 // pequenos como uma questão de prova em PDF/DOCX.
@@ -39,6 +40,17 @@ const uploadDocx = multer({
   fileFilter: (req, file, cb) => {
     if (file.mimetype !== MIME_DOCX) {
       return cb(new Error('Apenas arquivos .docx são aceitos.'));
+    }
+    cb(null, true);
+  },
+});
+
+const uploadImagem = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!MIMES_IMAGEM.includes(file.mimetype)) {
+      return cb(new Error('Apenas imagens JPG, PNG, WEBP, GIF, BMP ou TIFF são aceitas.'));
     }
     cb(null, true);
   },
@@ -89,6 +101,20 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
   } catch (err) {
     console.error('Erro ao extrair DOCX:', err.message);
     return res.status(500).json({ erro: 'Falha ao processar o DOCX.', detalhe: err.message });
+  }
+});
+
+// Recebe uma imagem e usa OCR para retornar o texto detectado.
+app.post('/api/questoes/extrair-imagem', uploadImagem.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ erro: 'Nenhuma imagem enviada. Use o campo "arquivo".' });
+    }
+    const { texto, confianca } = await extrairTextoImagem(req.file.buffer);
+    return res.json({ nomeArquivo: req.file.originalname, texto, confianca });
+  } catch (err) {
+    console.error('Erro ao reconhecer texto da imagem:', err.message);
+    return res.status(500).json({ erro: 'Falha ao ler o texto da imagem.', detalhe: err.message });
   }
 });
 

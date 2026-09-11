@@ -4,6 +4,7 @@
 
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
+const { createWorker } = require('tesseract.js');
 
 async function extrairTextoPdf(buffer) {
   const resultado = await pdfParse(buffer);
@@ -15,4 +16,17 @@ async function extrairTextoDocx(buffer) {
   return { texto: resultado.value.trim(), avisos: resultado.messages.map((m) => m.message) };
 }
 
-module.exports = { extrairTextoPdf, extrairTextoDocx };
+async function extrairTextoImagem(buffer) {
+  const worker = await createWorker('por+eng');
+  try {
+    const resultado = await worker.recognize(buffer);
+    return {
+      texto: resultado.data.text.trim(),
+      confianca: Math.round(resultado.data.confidence),
+    };
+  } finally {
+    await worker.terminate();
+  }
+}
+
+module.exports = { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem };

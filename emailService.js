@@ -1,14 +1,15 @@
 // emailService.js
 // Conecta numa caixa do Gmail via IMAP, busca e-mails não lidos, e extrai
-// o conteúdo de cada um: texto do corpo da mensagem + texto de qualquer
-// anexo em PDF ou DOCX. Cada e-mail processado é marcado como lido, para
+// conteúdo de cada um: texto do corpo da mensagem + texto de qualquer
+// anexo em PDF, DOCX ou imagem. Cada e-mail processado é marcado como lido, para
 // não ser reprocessado na próxima verificação.
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
-const { extrairTextoPdf, extrairTextoDocx } = require('./extratores');
+const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 
 const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const MIMES_IMAGEM = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
 
 function credenciaisConfiguradas() {
   return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
@@ -23,6 +24,10 @@ async function extrairAnexo(anexo) {
     if (anexo.contentType === MIME_DOCX) {
       const { texto, avisos } = await extrairTextoDocx(anexo.content);
       return { nomeArquivo: anexo.filename, tipo: 'docx', avisos, texto };
+    }
+    if (MIMES_IMAGEM.includes(anexo.contentType)) {
+      const { texto, confianca } = await extrairTextoImagem(anexo.content);
+      return { nomeArquivo: anexo.filename, tipo: 'imagem', confianca, texto };
     }
     return { nomeArquivo: anexo.filename, tipo: anexo.contentType, ignorado: true };
   } catch (err) {
@@ -64,7 +69,7 @@ async function verificarNovosEmails() {
         const parseado = await simpleParser(mensagem.source);
 
         const anexosRelevantes = (parseado.attachments || []).filter(
-          (a) => a.contentType === 'application/pdf' || a.contentType === MIME_DOCX
+          (a) => a.contentType === 'application/pdf' || a.contentType === MIME_DOCX || MIMES_IMAGEM.includes(a.contentType)
         );
 
         const anexosExtraidos = [];
