@@ -147,6 +147,35 @@
     cursor: pointer;
     margin-left: 0.35rem;
   }
+  .confirmacao-exclusao {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #f0b7b7;
+    border-radius: 7px;
+    background: #fff5f5;
+    color: #8f1d1d;
+    font-size: 0.8rem;
+  }
+  .confirmacao-exclusao button {
+    border-radius: 5px;
+    padding: 0.3rem 0.55rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+  .confirmar-exclusao {
+    border: 1px solid #d92c2c;
+    background: #d92c2c;
+    color: #fff;
+  }
+  .cancelar-exclusao {
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+  }
   .editor-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -464,19 +493,41 @@
           <div class="remetente">${escapeHtml(questao.criadoEm ? new Date(questao.criadoEm).toLocaleString('pt-BR') : '')}</div>
           <div class="corpo">${escapeHtml(questao.texto || '')}</div>
           <button class="excluir excluir-questao" data-id="${escapeHtml(questao.id)}">Excluir questão</button>
+          <div class="confirmacao-exclusao oculto">
+            <span>Excluir esta questão permanentemente?</span>
+            <button class="confirmar-exclusao">Confirmar exclusão</button>
+            <button class="cancelar-exclusao">Cancelar</button>
+          </div>
         </div>
       `).join('') || '<div class="status">Nenhuma questão salva ainda.</div>';
       statusQuestoesEl.textContent = `${dados.questoes.length} questão(ões) carregada(s).`;
       statusQuestoesEl.className = 'status ok';
-      listaQuestoesEl.querySelectorAll('.excluir-questao').forEach((botao) => botao.addEventListener('click', async () => {
-        if (!confirm('Excluir esta questão permanentemente do Firebase?')) return;
+      listaQuestoesEl.querySelectorAll('.excluir-questao').forEach((botao) => botao.addEventListener('click', () => {
+        const confirmacao = botao.parentElement.querySelector('.confirmacao-exclusao');
+        confirmacao.classList.remove('oculto');
+        botao.classList.add('oculto');
+      }));
+      listaQuestoesEl.querySelectorAll('.cancelar-exclusao').forEach((botao) => botao.addEventListener('click', () => {
+        const confirmacao = botao.closest('.confirmacao-exclusao');
+        confirmacao.classList.add('oculto');
+        confirmacao.parentElement.querySelector('.excluir-questao').classList.remove('oculto');
+      }));
+      listaQuestoesEl.querySelectorAll('.confirmar-exclusao').forEach((botao) => botao.addEventListener('click', async () => {
+        const confirmacao = botao.closest('.confirmacao-exclusao');
+        const item = confirmacao.parentElement;
+        const excluirBotao = item.querySelector('.excluir-questao');
         botao.disabled = true;
         try {
-          const resposta = await fetch(API_BASE + '/api/questoes/' + encodeURIComponent(botao.dataset.id), { method: 'DELETE' });
+          const resposta = await fetch(API_BASE + '/api/questoes/' + encodeURIComponent(excluirBotao.dataset.id), { method: 'DELETE' });
           const erro = await resposta.json();
           if (!resposta.ok) throw new Error(erro.erro || 'Não foi possível excluir a questão.');
-          carregarQuestoes();
-        } catch (err) { alert(err.message); botao.disabled = false; }
+          item.remove();
+          statusQuestoesEl.textContent = 'Questão excluída com sucesso.';
+          statusQuestoesEl.className = 'status ok';
+        } catch (err) {
+          botao.disabled = false;
+          confirmacao.querySelector('span').textContent = err.message;
+        }
       }));
     } catch (err) {
       statusQuestoesEl.textContent = err.message;
