@@ -64,13 +64,13 @@ app.get('/api/status', (req, res) => {
 // Salva o texto revisado pelo professor no Cloud Firestore.
 app.post('/api/questoes', express.json(), async (req, res) => {
   try {
-    const { texto, tipoOrigem, nomeArquivo, paginas, confianca, avisos } = req.body || {};
+    const { texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos } = req.body || {};
     if (typeof texto !== 'string' || !texto.trim()) {
       return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
     }
 
     const questao = await criarQuestao({
-      texto: texto.trim(), tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+      texto: texto.trim(), conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
     });
     return res.status(201).json(questao);
   } catch (err) {

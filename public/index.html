@@ -147,6 +147,35 @@
     cursor: pointer;
     margin-left: 0.35rem;
   }
+  .editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.6rem;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 8px 8px 0 0;
+    background: var(--bg);
+  }
+  .editor-toolbar button, .editor-toolbar select {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 5px;
+    padding: 0.35rem 0.5rem;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .editor {
+    min-height: 230px;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 0 0 8px 8px;
+    outline: none;
+    line-height: 1.5;
+    background: #fff;
+  }
+  .editor:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #eef3fe; }
+  .editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
   .oculto { display: none; }
 
   .email-item {
@@ -195,6 +224,30 @@
       </h2>
       <div class="meta" id="meta"></div>
       <textarea id="textoExtraido" readonly></textarea>
+    </div>
+
+    <div class="card">
+      <h1 style="font-size:1rem;">Escrever questão</h1>
+      <p class="subtitle" style="margin-bottom:1rem;">Digite ou cole uma questão e use a barra para formatar o conteúdo.</p>
+      <div class="editor-toolbar" id="editorToolbar">
+        <button type="button" data-command="bold"><strong>B</strong></button>
+        <button type="button" data-command="italic"><em>I</em></button>
+        <button type="button" data-command="underline"><u>U</u></button>
+        <button type="button" data-command="insertUnorderedList">Lista</button>
+        <button type="button" data-command="insertOrderedList">Numerada</button>
+        <button type="button" data-command="justifyLeft">Esquerda</button>
+        <button type="button" data-command="justifyCenter">Centro</button>
+        <button type="button" data-command="justifyRight">Direita</button>
+        <select id="editorFormato" aria-label="Formato do texto">
+          <option value="p">Parágrafo</option>
+          <option value="h2">Título</option>
+          <option value="h3">Subtítulo</option>
+          <option value="blockquote">Citação</option>
+        </select>
+      </div>
+      <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva aqui o enunciado da questão..."></div>
+      <button class="enviar" id="btnSalvarEditada">Salvar questão escrita</button>
+      <div class="status" id="statusEditada"></div>
     </div>
 
     <div class="card">
@@ -447,12 +500,49 @@
     const resposta = await fetch(API_BASE + '/api/questoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto, tipoOrigem, nomeArquivo }),
+      body: JSON.stringify({ texto, conteudoHtml: arguments[3] || '', tipoOrigem, nomeArquivo }),
     });
     const dados = await resposta.json();
     if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
     return dados;
   }
+
+  const editorQuestao = document.getElementById('editorQuestao');
+  const statusEditadaEl = document.getElementById('statusEditada');
+  document.querySelectorAll('#editorToolbar [data-command]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      editorQuestao.focus();
+      document.execCommand(botao.dataset.command, false);
+    });
+  });
+  document.getElementById('editorFormato').addEventListener('change', (evento) => {
+    editorQuestao.focus();
+    document.execCommand('formatBlock', false, evento.target.value);
+  });
+  document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
+    const texto = editorQuestao.innerText.trim();
+    if (!texto) {
+      statusEditadaEl.textContent = 'Escreva uma questão antes de salvar.';
+      statusEditadaEl.className = 'status erro';
+      return;
+    }
+    const botao = document.getElementById('btnSalvarEditada');
+    botao.disabled = true;
+    statusEditadaEl.textContent = 'Salvando no Firebase...';
+    statusEditadaEl.className = 'status';
+    try {
+      await salvarTexto(texto, 'manual', 'questao-escrita', editorQuestao.innerHTML);
+      statusEditadaEl.textContent = 'Questão escrita salva com sucesso.';
+      statusEditadaEl.className = 'status ok';
+      editorQuestao.innerHTML = '';
+      carregarQuestoes();
+    } catch (err) {
+      statusEditadaEl.textContent = err.message;
+      statusEditadaEl.className = 'status erro';
+    } finally {
+      botao.disabled = false;
+    }
+  });
 
   btnVerificarEmail.addEventListener('click', async () => {
     btnVerificarEmail.disabled = true;

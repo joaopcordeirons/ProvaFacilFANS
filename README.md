@@ -6,6 +6,7 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 
 - Extração de texto de PDF, DOCX e imagens por OCR.
 - Salvamento manual da questão revisada em `POST /api/questoes`.
+- Editor visual para escrever questões com negrito, itálico, sublinhado, títulos, citações, listas e alinhamento.
 - Salvamento do corpo e dos anexos extraídos na seção de verificação de e-mails.
 - Consulta das últimas questões em `GET /api/questoes`.
 - Exclusão de questões em `DELETE /api/questoes/:id`, com confirmação na interface.
@@ -19,7 +20,7 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 4. No ambiente do servidor, configure `FIREBASE_SERVICE_ACCOUNT_JSON` com o conteúdo JSON da chave em uma única linha. Como alternativa, configure `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY` separadamente.
 5. Nunca envie a chave privada para o navegador, para o Git ou para o arquivo `public/index.html`. O SDK usado é o Firebase Admin SDK, executado somente no servidor.
 
-A coleção criada automaticamente será `questoes`. Cada documento contém `texto`, `tipoOrigem`, `nomeArquivo`, metadados de extração, `criadoEm` e `atualizadoEm`.
+A coleção criada automaticamente será `questoes`. Cada documento contém `texto`, `conteudoHtml`, `tipoOrigem`, `nomeArquivo`, metadados de extração, `criadoEm` e `atualizadoEm`. O HTML salvo passa por uma sanitização server-side básica antes de ser persistido.
 
 Sem as variáveis de Firebase, a aplicação continua iniciando e os endpoints de persistência retornam `503` com uma mensagem de configuração. Isso permite testar a extração antes de conectar um projeto real.
 

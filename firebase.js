@@ -9,6 +9,15 @@ const admin = require('firebase-admin');
 let firestore = null;
 let inicializacaoTentada = false;
 
+function sanitizarHtml(html) {
+  if (typeof html !== 'string') return '';
+  return html
+    .replace(/<(script|style|iframe|object|embed|form)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/\s(on\w+|style|srcdoc)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s(href|src)\s*=\s*("\s*javascript:[^"]*"|'\s*javascript:[^']*'|\s*javascript:[^\s>]+)/gi, '')
+    .trim();
+}
+
 function obterFirestore() {
   if (firestore) return firestore;
   if (inicializacaoTentada) return null;
@@ -60,6 +69,7 @@ async function criarQuestao(dados) {
   const agora = admin.firestore.FieldValue.serverTimestamp();
   const referencia = await banco.collection('questoes').add({
     texto: dados.texto,
+    conteudoHtml: sanitizarHtml(dados.conteudoHtml || ''),
     tipoOrigem: dados.tipoOrigem || 'manual',
     nomeArquivo: dados.nomeArquivo || null,
     paginas: Number.isFinite(dados.paginas) ? dados.paginas : null,
@@ -98,4 +108,4 @@ async function excluirQuestao(id) {
   return { id };
 }
 
-module.exports = { obterFirestore, criarQuestao, listarQuestoes, excluirQuestao };
+module.exports = { obterFirestore, criarQuestao, listarQuestoes, excluirQuestao, sanitizarHtml };
