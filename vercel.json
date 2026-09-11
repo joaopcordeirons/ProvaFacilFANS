@@ -3,7 +3,7 @@
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": "*.traineddata"
+      "includeFiles": "{*.traineddata,node_modules/tesseract.js-core/*.wasm}"
     }
   },
   "routes": [

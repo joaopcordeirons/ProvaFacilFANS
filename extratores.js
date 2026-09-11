@@ -35,6 +35,23 @@ for (const arquivo of ['eng.traineddata', 'por.traineddata']) {
   }
 }
 
+// Mesma checagem para os binários .wasm do motor do Tesseract. Esse arquivo
+// é carregado dinamicamente (não via require estático), então o empacotador
+// da Vercel não detecta essa dependência sozinho — precisa do "includeFiles"
+// no vercel.json apontando pra node_modules/tesseract.js-core/*.wasm.
+try {
+  const dirCore = path.join(__dirname, 'node_modules', 'tesseract.js-core');
+  const wasms = fs.readdirSync(dirCore).filter((f) => f.endsWith('.wasm'));
+  if (wasms.length === 0) {
+    console.error('[ocr] ATENÇÃO: nenhum arquivo .wasm encontrado em ' + dirCore +
+      '. Confira o "includeFiles" no vercel.json.');
+  } else {
+    console.log(`[ocr] ${wasms.length} arquivo(s) .wasm do tesseract.js-core encontrados.`);
+  }
+} catch (err) {
+  console.error('[ocr] ATENÇÃO: não foi possível checar node_modules/tesseract.js-core:', err.message);
+}
+
 // Helper genérico: corre uma Promise contra um limite de tempo, com uma
 // mensagem de erro específica para facilitar o diagnóstico nos logs.
 function comLimiteDeTempo(promessa, ms, mensagemTimeout) {
