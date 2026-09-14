@@ -1,0 +1,98 @@
+// verificadorConteudo.js
+// Verificação de COERÊNCIA de conteúdo (isso é diferente de ortografia/
+// gramática, que já é feita pelo LanguageTool em corretorGramatical.js).
+// Aqui a pergunta é "essa questão faz sentido? a alternativa combina com
+// o enunciado? o OCR não bagunçou tudo?" — coisa que exige uma IA de
+// verdade lendo o texto, não dá pra fazer com regras.
+//
+// Usa a API do Gemini (Google AI Studio) porque ela tem um nível
+// gratuito real, sem cartão de crédito — só um limite de uso por
+// minuto/dia. Por isso essa verificação é OPCIONAL e sob demanda (só
+// roda quando o professor clica em "Verificar conteúdo"), nunca
+// automática em todo upload — assim o limite gratuito não estoura com
+// muitos professores usando ao mesmo tempo.
+//
+// Chave gratuita em: https://aistudio.google.com/apikey
+// Configurar em GEMINI_API_KEY no .env.
+
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const TIMEOUT_MS = 15000;
+
+function montarPrompt(enunciado, alternativas) {
+  const blocoAlternativas = alternativas && alternativas.length
+    ? `\nAlternativas:\n${alternativas.join('\n')}`
+    : '\n(Questão dissertativa, sem alternativas.)';
+
+  return `Você está revisando uma questão de prova escolar que foi extraída por OCR ou digitada por um professor. Avalie APENAS se o conteúdo faz sentido — não repita a questão, não corrija ortografia.
+
+Verifique:
+1) O enunciado é compreensível e faz sentido (não é uma salada de palavras causada por erro de leitura)?
+2) Se houver alternativas, elas realmente respondem ao que o enunciado pergunta, e não são todas iguais ou vazias?
+3) Existe algum problema óbvio de conteúdo (ex.: pergunta incompleta, falta uma alternativa correta evidente, contradição)?
+
+Questão:
+${enunciado}${blocoAlternativas}
+
+Responda ESTRITAMENTE em JSON, sem markdown, sem texto antes ou depois, no formato:
+{"coerente": true ou false, "observacao": "explicação breve em português, no máximo 2 frases, ou string vazia se estiver tudo certo"}`;
+}
+
+function extrairJson(textoResposta) {
+  const limpo = textoResposta.replace(/```json|```/g, '').trim();
+  return JSON.parse(limpo);
+}
+
+// Verifica a coerência de uma questão via Gemini. Nunca lança erro pra
+// quem chamou: qualquer falha (sem chave configurada, rede fora do ar,
+// limite de uso estourado, resposta em formato inesperado) devolve
+// { disponivel: false, motivo } em vez de quebrar o fluxo do professor.
+async function verificarConteudo({ enunciado, alternativas }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { disponivel: false, motivo: 'GEMINI_API_KEY não configurada no servidor.' };
+  }
+  if (!enunciado || !enunciado.trim()) {
+    return { disponivel: false, motivo: 'Nada para verificar.' };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const resposta = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: montarPrompt(enunciado, alternativas || []) }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 300 },
+      }),
+      signal: controller.signal,
+    });
+
+    if (resposta.status === 429) {
+      return { disponivel: false, motivo: 'Limite gratuito de uso da IA atingido no momento. Tente de novo em alguns minutos.' };
+    }
+    if (!resposta.ok) {
+      throw new Error(`Gemini respondeu status ${resposta.status}`);
+    }
+
+    const dados = await resposta.json();
+    const textoResposta = dados?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textoResposta) throw new Error('Resposta da IA veio vazia.');
+
+    const resultado = extrairJson(textoResposta);
+    return {
+      disponivel: true,
+      coerente: Boolean(resultado.coerente),
+      observacao: resultado.observacao || '',
+    };
+  } catch (err) {
+    console.warn('[verificadorConteudo] Não foi possível verificar com Gemini:', err.message);
+    return { disponivel: false, motivo: 'Não foi possível verificar agora. Tente novamente em instantes.' };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+module.exports = { verificarConteudo };

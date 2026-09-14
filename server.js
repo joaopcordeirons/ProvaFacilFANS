@@ -9,6 +9,8 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
+const { identificarQuestoes } = require('./extratorQuestoes');
+const { verificarConteudo } = require('./verificadorConteudo');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
 const { criarQuestao, listarQuestoes, excluirQuestao } = require('./firebase');
 
@@ -90,6 +92,39 @@ app.get('/api/questoes', async (req, res) => {
   } catch (err) {
     console.error('Erro ao listar questões:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Recebe um texto bruto (extraído de PDF/DOCX/OCR/e-mail, possivelmente
+// com várias questões e cabeçalho/instruções misturados) e devolve só as
+// questões já separadas, prontas para o professor revisar e salvar uma a
+// uma. Roda 100% local (motor de regras), sem custo por chamada.
+app.post('/api/questoes/identificar', express.json({ limit: '2mb' }), async (req, res) => {
+  try {
+    const { texto } = req.body || {};
+    if (typeof texto !== 'string' || !texto.trim()) {
+      return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
+    }
+    return res.json(await identificarQuestoes(texto));
+  } catch (err) {
+    console.error('Erro ao identificar questões:', err.message);
+    return res.status(500).json({ erro: 'Falha ao identificar questões no texto.', detalhe: err.message });
+  }
+});
+
+// Verificação OPCIONAL de coerência de conteúdo via IA (Gemini, sob
+// demanda — só quando o professor clica, nunca automático). Ver
+// verificadorConteudo.js para o porquê disso ser opcional.
+app.post('/api/questoes/verificar-conteudo', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { enunciado, alternativas } = req.body || {};
+    if (typeof enunciado !== 'string' || !enunciado.trim()) {
+      return res.status(400).json({ erro: 'O campo "enunciado" é obrigatório.' });
+    }
+    return res.json(await verificarConteudo({ enunciado, alternativas }));
+  } catch (err) {
+    console.error('Erro ao verificar conteúdo:', err.message);
+    return res.status(500).json({ erro: 'Falha ao verificar conteúdo.', detalhe: err.message });
   }
 });
 

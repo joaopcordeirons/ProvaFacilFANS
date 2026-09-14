@@ -212,4 +212,4 @@ async function extrairTextoImagem(buffer) {
   }
 }
 
-module.exports = { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem };
+module.exports = { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem, comLimiteDeTempo };

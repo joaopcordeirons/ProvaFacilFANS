@@ -221,6 +221,67 @@
   .email-item .corpo { white-space: pre-wrap; margin-bottom: 0.5rem; }
   .email-item .anexo { border-top: 1px dashed var(--border); padding-top: 0.5rem; margin-top: 0.5rem; }
   .email-item .anexo-nome { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+
+  .questao-candidata {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+  }
+  .questao-candidata.salva { border-color: #1a7a3d; background: #f3fbf5; }
+  .questao-candidata-cabecalho {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+  }
+  .badge {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .questao-candidata textarea {
+    min-height: 120px;
+    font-family: inherit;
+    font-size: 0.85rem;
+  }
+  .questao-candidata .acoes { margin-top: 0.5rem; }
+  .questao-candidata .acoes button.verificar {
+    background: #fff;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .verificacao-conteudo {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .verificacao-conteudo.ok { border-color: #1a7a3d; background: #f3fbf5; color: #1a7a3d; }
+  .verificacao-conteudo.alerta { border-color: #b45309; background: #fffbeb; color: #92400e; }
+  .verificacao-conteudo.indisponivel { color: var(--muted); font-style: italic; }
+  .aviso-identificacao {
+    font-size: 0.82rem;
+    color: var(--muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  details.bruto summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+  }
+  details.bruto textarea { margin-top: 0.5rem; }
 </style>
 </head>
 <body>
@@ -250,16 +311,25 @@
 
     <div class="card resultado oculto" id="cardResultado">
       <h2>
-        Texto extraído
-        <span><button class="copiar" id="btnCopiar">Copiar</button><button class="salvar" id="btnSalvar">Salvar questão</button></span>
+        Questões identificadas
+        <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
       </h2>
       <div class="meta" id="meta"></div>
-      <textarea id="textoExtraido" readonly></textarea>
+      <div class="status" id="statusIdentificacao"></div>
+      <div id="listaQuestoesIdentificadas"></div>
+      <details class="bruto">
+        <summary>Ver texto bruto extraído (para conferência)</summary>
+        <textarea id="textoExtraido" readonly></textarea>
+      </details>
     </div>
 
     <div class="card">
-      <h1 style="font-size:1rem;">Escrever questão</h1>
-      <p class="subtitle" style="margin-bottom:1rem;">Digite ou cole uma questão e use a barra para formatar o conteúdo.</p>
+      <h1 style="font-size:1rem;">Escrever ou colar questão(ões)</h1>
+      <p class="subtitle" style="margin-bottom:1rem;">
+        Digite ou cole o texto (pode ser uma única questão ou uma prova inteira com várias) e use
+        a barra para formatar. O sistema identifica e separa automaticamente cada questão, do
+        mesmo jeito que faz com arquivos enviados.
+      </p>
       <div class="editor-toolbar" id="editorToolbar">
         <button type="button" data-command="bold"><strong>B</strong></button>
         <button type="button" data-command="italic"><em>I</em></button>
@@ -276,9 +346,10 @@
           <option value="blockquote">Citação</option>
         </select>
       </div>
-      <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva aqui o enunciado da questão..."></div>
-      <button class="enviar" id="btnSalvarEditada">Salvar questão escrita</button>
+      <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva ou cole aqui o texto da(s) questão(ões)..."></div>
+      <button class="enviar" id="btnSalvarEditada">Identificar questões</button>
       <div class="status" id="statusEditada"></div>
+      <div id="listaQuestoesIdentificadasManual"></div>
     </div>
 
     <div class="card">
@@ -316,7 +387,8 @@
   const metaEl = document.getElementById('meta');
   const textoEl = document.getElementById('textoExtraido');
   const btnCopiar = document.getElementById('btnCopiar');
-  const btnSalvar = document.getElementById('btnSalvar');
+  const statusIdentificacaoEl = document.getElementById('statusIdentificacao');
+  const listaQuestoesIdentificadasEl = document.getElementById('listaQuestoesIdentificadas');
 
   let tipo = 'pdf'; // 'pdf' | 'docx' | 'imagem'
   let arquivoSelecionado = null;
@@ -439,6 +511,8 @@
 
       textoEl.value = dados.texto || '(nenhum texto encontrado)';
       cardResultado.classList.remove('oculto');
+
+      await identificarErenderizarQuestoes(dados.texto || '', tipo, arquivoSelecionado?.name || null, listaQuestoesIdentificadasEl, statusIdentificacaoEl);
     } catch (err) {
       statusEl.textContent = err.message;
       statusEl.className = 'status erro';
@@ -451,32 +525,173 @@
     textoEl.select();
     document.execCommand('copy');
     btnCopiar.textContent = 'Copiado!';
-    setTimeout(() => (btnCopiar.textContent = 'Copiar'), 1500);
+    setTimeout(() => (btnCopiar.textContent = 'Copiar texto bruto'), 1500);
   });
 
-  btnSalvar.addEventListener('click', async () => {
-    if (!textoEl.value.trim()) return;
-    btnSalvar.disabled = true;
-    statusEl.textContent = 'Salvando no Firebase...';
+  // Monta o texto final de uma questão (enunciado + alternativas, se houver)
+  // a partir do que foi identificado automaticamente, no mesmo formato que
+  // vai para o textarea editável de cada card.
+  function montarTextoQuestao(questao) {
+    const partes = [questao.enunciado];
+    if (questao.alternativas && questao.alternativas.length) {
+      partes.push('', ...questao.alternativas);
+    }
+    return partes.join('\n').trim();
+  }
+
+  async function salvarQuestaoNoFirebase(texto, tipoOrigem, nomeArquivo) {
+    const resposta = await fetch(API_BASE + '/api/questoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto, tipoOrigem, nomeArquivo }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
+    return dados;
+  }
+
+  // Chama o motor de identificação de questões (regras, roda no servidor,
+  // sem custo) e desenha um card editável para cada questão encontrada,
+  // já sem cabeçalho/instruções/rodapé. O professor confere e salva cada
+  // uma individualmente (ou descarta, se o motor tiver incluído algo a
+  // mais por engano). Genérica: serve tanto para texto vindo de arquivo
+  // (PDF/DOCX/OCR) quanto para texto puro colado/digitado à mão — o motor
+  // de identificação não faz diferença de onde o texto veio.
+  async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquivo, containerEl, statusEl) {
+    containerEl.innerHTML = '';
+    if (!textoBruto.trim()) {
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.textContent = 'Identificando questões no texto...';
     statusEl.className = 'status';
+
+    let questoes = [];
+    let correcaoAplicada = true;
     try {
-      const resposta = await fetch(API_BASE + '/api/questoes', {
+      const resposta = await fetch(API_BASE + '/api/questoes/identificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoEl.value, tipoOrigem: tipo, nomeArquivo: arquivoSelecionado?.name || null }),
+        body: JSON.stringify({ texto: textoBruto }),
       });
       const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
-      statusEl.textContent = `Questão salva com sucesso (ID: ${dados.id}).`;
-      statusEl.className = 'status ok';
-      carregarQuestoes();
+      if (!resposta.ok) throw new Error(dados.erro || 'Falha ao identificar questões.');
+      questoes = dados.questoes || [];
+      correcaoAplicada = dados.correcaoAplicada !== false;
     } catch (err) {
-      statusEl.textContent = err.message;
+      statusEl.textContent = `Não foi possível identificar automaticamente: ${err.message}`;
       statusEl.className = 'status erro';
-    } finally {
-      btnSalvar.disabled = false;
+      return;
     }
-  });
+
+    if (questoes.length === 0) {
+      statusEl.textContent = '';
+      containerEl.innerHTML = `
+        <div class="aviso-identificacao">
+          Nenhuma questão foi reconhecida automaticamente nesse texto (pode ter sobrado só
+          cabeçalho/instrução, ou o formato fugiu do padrão). Revise o texto original e tente
+          reformular com uma numeração mais clara (ex.: "1.", "2)"), se for o caso.
+        </div>`;
+      return;
+    }
+
+    statusEl.textContent = `${questoes.length} questão(ões) identificada(s). Confira cada uma antes de salvar.`;
+    statusEl.className = 'status ok';
+    if (!correcaoAplicada) {
+      statusEl.textContent += ' (correção automática de português indisponível no momento — revise com atenção.)';
+    }
+
+    questoes.forEach((questao) => {
+      const item = document.createElement('div');
+      item.className = 'questao-candidata';
+      item.innerHTML = `
+        <div class="questao-candidata-cabecalho">
+          <strong>Questão ${questao.numero}</strong>
+          <span class="badge">${questao.alternativas && questao.alternativas.length ? 'múltipla escolha' : 'dissertativa'}</span>
+        </div>
+        <textarea class="texto-questao-candidata">${escapeHtml(montarTextoQuestao(questao))}</textarea>
+        <div class="acoes">
+          <button class="salvar btn-salvar-candidata">Salvar questão</button>
+          <button class="verificar btn-verificar-candidata" type="button">Verificar conteúdo com IA</button>
+          <button class="excluir btn-descartar-candidata">Descartar</button>
+        </div>
+        <div class="status-inline"></div>
+        <div class="verificacao-conteudo oculto"></div>
+      `;
+      containerEl.appendChild(item);
+
+      const textareaEl = item.querySelector('.texto-questao-candidata');
+      const avisoEl = item.querySelector('.status-inline');
+
+      item.querySelector('.btn-descartar-candidata').addEventListener('click', () => item.remove());
+
+      item.querySelector('.btn-verificar-candidata').addEventListener('click', async (evento) => {
+        const botao = evento.target;
+        const caixaVerificacao = item.querySelector('.verificacao-conteudo');
+        botao.disabled = true;
+        botao.textContent = 'Verificando...';
+        caixaVerificacao.classList.remove('oculto');
+        caixaVerificacao.className = 'verificacao-conteudo';
+        caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+        try {
+          // Usa o texto atual do textarea (o professor pode já ter editado).
+          const [enunciadoAtual, ...restoLinhas] = textareaEl.value.split('\n');
+          const alternativasAtuais = restoLinhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+          const resposta = await fetch(API_BASE + '/api/questoes/verificar-conteudo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+          });
+          const dados = await resposta.json();
+          if (!resposta.ok) throw new Error(dados.erro || 'Falha ao verificar.');
+          if (!dados.disponivel) {
+            caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+            caixaVerificacao.textContent = dados.motivo || 'Verificação indisponível no momento.';
+          } else if (dados.coerente) {
+            caixaVerificacao.className = 'verificacao-conteudo ok';
+            caixaVerificacao.textContent = `✓ O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
+          } else {
+            caixaVerificacao.className = 'verificacao-conteudo alerta';
+            caixaVerificacao.textContent = `⚠ Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
+          }
+        } catch (err) {
+          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+          caixaVerificacao.textContent = err.message;
+        } finally {
+          botao.disabled = false;
+          botao.textContent = 'Verificar conteúdo com IA';
+        }
+      });
+
+      item.querySelector('.btn-salvar-candidata').addEventListener('click', async (evento) => {
+        if (!textareaEl.value.trim()) {
+          avisoEl.className = 'status-inline erro';
+          avisoEl.textContent = 'A questão não pode ficar vazia.';
+          return;
+        }
+        const botao = evento.target;
+        botao.disabled = true;
+        item.querySelector('.btn-descartar-candidata').disabled = true;
+        avisoEl.className = 'status-inline';
+        avisoEl.textContent = 'Salvando no Firebase...';
+        try {
+          await salvarQuestaoNoFirebase(textareaEl.value, tipoOrigem, nomeArquivo);
+          item.classList.add('salva');
+          avisoEl.className = 'status-inline';
+          avisoEl.textContent = 'Salva com sucesso.';
+          textareaEl.readOnly = true;
+          botao.textContent = 'Salva';
+          item.querySelector('.btn-descartar-candidata').classList.add('oculto');
+          carregarQuestoes();
+        } catch (err) {
+          avisoEl.className = 'status-inline erro';
+          avisoEl.textContent = err.message;
+          botao.disabled = false;
+          item.querySelector('.btn-descartar-candidata').disabled = false;
+        }
+      });
+    });
+  }
 
   const btnCarregarQuestoes = document.getElementById('btnCarregarQuestoes');
   const statusQuestoesEl = document.getElementById('statusQuestoes');
@@ -574,6 +789,7 @@
 
   const editorQuestao = document.getElementById('editorQuestao');
   const statusEditadaEl = document.getElementById('statusEditada');
+  const listaQuestoesIdentificadasManualEl = document.getElementById('listaQuestoesIdentificadasManual');
   document.querySelectorAll('#editorToolbar [data-command]').forEach((botao) => {
     botao.addEventListener('click', () => {
       editorQuestao.focus();
@@ -587,23 +803,14 @@
   document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
     const texto = editorQuestao.innerText.trim();
     if (!texto) {
-      statusEditadaEl.textContent = 'Escreva uma questão antes de salvar.';
+      statusEditadaEl.textContent = 'Escreva ou cole um texto antes de identificar.';
       statusEditadaEl.className = 'status erro';
       return;
     }
     const botao = document.getElementById('btnSalvarEditada');
     botao.disabled = true;
-    statusEditadaEl.textContent = 'Salvando no Firebase...';
-    statusEditadaEl.className = 'status';
     try {
-      await salvarTexto(texto, 'manual', 'questao-escrita', editorQuestao.innerHTML);
-      statusEditadaEl.textContent = 'Questão escrita salva com sucesso.';
-      statusEditadaEl.className = 'status ok';
-      editorQuestao.innerHTML = '';
-      carregarQuestoes();
-    } catch (err) {
-      statusEditadaEl.textContent = err.message;
-      statusEditadaEl.className = 'status erro';
+      await identificarErenderizarQuestoes(texto, 'manual', 'questao-escrita', listaQuestoesIdentificadasManualEl, statusEditadaEl);
     } finally {
       botao.disabled = false;
     }
