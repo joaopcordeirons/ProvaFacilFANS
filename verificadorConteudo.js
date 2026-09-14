@@ -92,10 +92,22 @@ async function verificarConteudo({ enunciado, alternativas }) {
     }
 
     const dados = await resposta.json();
-    const textoResposta = dados?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textoResposta) throw new Error('Resposta da IA veio vazia.');
+    const candidato = dados?.candidates?.[0];
+    const textoResposta = candidato?.content?.parts?.[0]?.text;
+    if (!textoResposta) {
+      // Motivo comum: o Gemini bloqueou a resposta por segurança
+      // (finishReason "SAFETY") e não devolveu nenhum texto.
+      const motivoBloqueio = candidato?.finishReason || 'sem candidato na resposta';
+      throw new Error(`Resposta da IA veio vazia (finishReason: ${motivoBloqueio}). Corpo bruto: ${JSON.stringify(dados).slice(0, 300)}`);
+    }
 
-    const resultado = extrairJson(textoResposta);
+    let resultado;
+    try {
+      resultado = extrairJson(textoResposta);
+    } catch (erroParse) {
+      throw new Error(`Não consegui interpretar o JSON devolvido pela IA. Texto recebido: ${textoResposta.slice(0, 300)}`);
+    }
+
     return {
       disponivel: true,
       coerente: Boolean(resultado.coerente),
@@ -103,7 +115,10 @@ async function verificarConteudo({ enunciado, alternativas }) {
     };
   } catch (err) {
     console.warn('[verificadorConteudo] Não foi possível verificar com Gemini:', err.message);
-    return { disponivel: false, motivo: 'Não foi possível verificar agora. Tente novamente em instantes.' };
+    // TEMPORÁRIO para diagnóstico: manda o motivo detalhado pro front-end,
+    // em vez de só no log do servidor. Reverter para a mensagem genérica
+    // assim que o problema for identificado e corrigido.
+    return { disponivel: false, motivo: `[debug] ${err.message}` };
   } finally {
     clearTimeout(timeoutId);
   }
