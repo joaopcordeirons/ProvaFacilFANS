@@ -60,9 +60,18 @@ async function verificarConteudo({ enunciado, alternativas }) {
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
-    const resposta = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    const resposta = await fetch(GEMINI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Chaves novas do Google AI Studio vêm no formato "AQ...." (Auth
+        // key). Diferente das antigas "AIzaSy..." (Standard key), que
+        // aceitavam bem o parâmetro "?key=" na URL, as novas são mais
+        // consistentes indo pelo cabeçalho x-goog-api-key — há relatos
+        // de erro 401 "ACCESS_TOKEN_TYPE_UNSUPPORTED" usando "?key=" com
+        // esse novo formato.
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: montarPrompt(enunciado, alternativas || []) }] }],
         generationConfig: { temperature: 0, maxOutputTokens: 300 },
@@ -72,6 +81,11 @@ async function verificarConteudo({ enunciado, alternativas }) {
 
     if (resposta.status === 429) {
       return { disponivel: false, motivo: 'Limite gratuito de uso da IA atingido no momento. Tente de novo em alguns minutos.' };
+    }
+    if (resposta.status === 401 || resposta.status === 403) {
+      const corpoErro = await resposta.text();
+      console.warn('[verificadorConteudo] Erro de autenticação na chave Gemini:', resposta.status, corpoErro);
+      return { disponivel: false, motivo: 'Chave de API do Gemini inválida ou não autorizada. Confira o GEMINI_API_KEY configurado no servidor.' };
     }
     if (!resposta.ok) {
       throw new Error(`Gemini respondeu status ${resposta.status}`);
