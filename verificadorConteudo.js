@@ -22,7 +22,7 @@
 // numa versão específica, defina GEMINI_MODEL no .env (ex.: gemini-3.7-flash).
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const TIMEOUT_MS = 15000;
+const TIMEOUT_MS = 20000;
 
 function montarPrompt(enunciado, alternativas) {
   const blocoAlternativas = alternativas && alternativas.length
@@ -79,7 +79,15 @@ async function verificarConteudo({ enunciado, alternativas }) {
       },
       body: JSON.stringify({
         contents: [{ parts: [{ text: montarPrompt(enunciado, alternativas || []) }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 300 },
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 300,
+          // Desliga o "thinking" do modelo: essa checagem é uma
+          // classificação simples, não precisa de raciocínio profundo,
+          // e o thinking estava sendo a causa da demora (às vezes
+          // estourando o timeout de 15s e caindo no "aborted").
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       }),
       signal: controller.signal,
     });
