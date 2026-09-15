@@ -15,7 +15,12 @@
 // Chave gratuita em: https://aistudio.google.com/apikey
 // Configurar em GEMINI_API_KEY no .env.
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+// Modelo usado para a verificação. "gemini-flash-latest" é um alias que
+// o próprio Google mantém sempre apontando para o modelo "flash" mais
+// atual — evita que o código quebre de novo quando um modelo específico
+// (ex.: gemini-2.0-flash) for desativado no futuro. Se quiser travar
+// numa versão específica, defina GEMINI_MODEL no .env (ex.: gemini-3.7-flash).
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const TIMEOUT_MS = 15000;
 
@@ -86,6 +91,10 @@ async function verificarConteudo({ enunciado, alternativas }) {
       const corpoErro = await resposta.text();
       console.warn('[verificadorConteudo] Erro de autenticação na chave Gemini:', resposta.status, corpoErro);
       return { disponivel: false, motivo: 'Chave de API do Gemini inválida ou não autorizada. Confira o GEMINI_API_KEY configurado no servidor.' };
+    }
+    if (resposta.status === 404) {
+      console.warn('[verificadorConteudo] Modelo não encontrado:', GEMINI_MODEL);
+      return { disponivel: false, motivo: `Modelo de IA "${GEMINI_MODEL}" não existe ou foi desativado pelo Google. Ajuste GEMINI_MODEL no servidor.` };
     }
     if (!resposta.ok) {
       throw new Error(`Gemini respondeu status ${resposta.status}`);
