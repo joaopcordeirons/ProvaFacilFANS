@@ -15,12 +15,16 @@
 // Chave gratuita em: https://aistudio.google.com/apikey
 // Configurar em GEMINI_API_KEY no .env.
 
-// Modelo usado para a verificação. "gemini-flash-latest" é um alias que
-// o próprio Google mantém sempre apontando para o modelo "flash" mais
-// atual — evita que o código quebre de novo quando um modelo específico
-// (ex.: gemini-2.0-flash) for desativado no futuro. Se quiser travar
-// numa versão específica, defina GEMINI_MODEL no .env (ex.: gemini-3.7-flash).
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+// Modelo usado para a verificação. IMPORTANTE: NÃO usamos mais o alias
+// "gemini-flash-latest" como padrão — ele aponta pro modelo Flash mais
+// recente do Google, e modelos recém-lançados (ex.: gemini-3.8-flash)
+// vêm com cota GRATUITA diária muito mais restrita (~20 requisições/dia,
+// contra ~1.000-1.500/dia dos modelos Flash mais antigos e estáveis).
+// "gemini-2.5-flash-lite" é o equilíbrio certo pra essa tarefa (checagem
+// simples de coerência, não precisa do modelo mais avançado) com cota
+// bem mais folgada no tier gratuito. Se quiser usar outro, defina
+// GEMINI_MODEL no .env (ex.: gemini-flash-latest, se topar a cota menor).
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 // 12s por tentativa: com MAX_TENTATIVAS=3 + esperas entre elas, o pior
 // caso fica em ~40s, com folga dentro do maxDuration=60s da função na
@@ -63,6 +67,18 @@ function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Monta a configuração de "thinking" de acordo com a família do modelo:
+// Gemini 3.x usa thinkingLevel e não aceita thinkingBudget; Gemini 2.x
+// (incluindo o gemini-2.5-flash-lite, que é o padrão atual) usa
+// thinkingBudget e rejeita thinkingLevel com erro. Usar o parâmetro
+// errado pra família quebra a chamada, então detectamos pelo nome.
+function montarThinkingConfig(modelo) {
+  const ehGemini3 = /^gemini-3/.test(modelo);
+  return ehGemini3
+    ? { thinkingLevel: 'low' }
+    : { thinkingBudget: 0 };
+}
+
 // Faz uma única chamada ao Gemini. Lança erro (com .status quando vier
 // da API) em vez de retornar { disponivel: false } — quem decide se
 // tenta de novo ou desiste é o chamador (verificarConteudo).
@@ -88,14 +104,7 @@ async function chamarGemini(apiKey, enunciado, alternativas) {
         generationConfig: {
           temperature: 0,
           maxOutputTokens: 300,
-          // Modelos Gemini 3 (ex.: gemini-3.8-flash, resolvido a partir
-          // de "gemini-flash-latest") usam thinkingLevel em vez de
-          // thinkingBudget, e não suportam desligar o thinking por
-          // completo. "low" reduz bastante a demora sem cair tanto na
-          // precisão quanto thinkingBudget:0/nível mínimo (que causou
-          // falsos positivos, ex.: acusar um enunciado completo como
-          // "cortado").
-          thinkingConfig: { thinkingLevel: 'low' },
+          thinkingConfig: montarThinkingConfig(GEMINI_MODEL),
         },
       }),
       signal: controller.signal,
@@ -202,7 +211,7 @@ async function verificarConteudo({ enunciado, alternativas }) {
     return {
       disponivel: false,
       motivo: ultimoErro.ehDiario
-        ? 'Limite gratuito DIÁRIO de uso da IA atingido. Só volta a funcionar amanhã (reset é no fuso do Google, ~21h de Brasília) — o resto do sistema continua normal, só esse botão fica indisponível até lá.'
+        ? 'Limite gratuito DIÁRIO de uso da IA atingido. Reseta à meia-noite no horário do Pacífico (EUA) — por volta de 4h-5h da manhã no horário de Brasília. O resto do sistema continua normal, só esse botão fica indisponível até lá.'
         : 'Limite gratuito de uso da IA atingido no momento (por minuto). Tente de novo em instantes.',
     };
   }
