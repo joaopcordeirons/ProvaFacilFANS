@@ -15,16 +15,17 @@
 // Chave gratuita em: https://aistudio.google.com/apikey
 // Configurar em GEMINI_API_KEY no .env.
 
-// Modelo usado para a verificação. IMPORTANTE: NÃO usamos mais o alias
+// Modelo usado para a verificação. IMPORTANTE: NÃO usamos o alias
 // "gemini-flash-latest" como padrão — ele aponta pro modelo Flash mais
 // recente do Google, e modelos recém-lançados (ex.: gemini-3.8-flash)
 // vêm com cota GRATUITA diária muito mais restrita (~20 requisições/dia,
-// contra ~1.000-1.500/dia dos modelos Flash mais antigos e estáveis).
-// "gemini-2.5-flash-lite" é o equilíbrio certo pra essa tarefa (checagem
-// simples de coerência, não precisa do modelo mais avançado) com cota
-// bem mais folgada no tier gratuito. Se quiser usar outro, defina
-// GEMINI_MODEL no .env (ex.: gemini-flash-latest, se topar a cota menor).
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+// contra centenas/dia dos modelos "-lite" já estabelecidos). Também não
+// dá pra usar gemini-2.5-flash-lite: foi desativado pelo Google pra
+// novos usuários (erro 404 "no longer available to new users"), que
+// recomenda gemini-3.5-flash-lite como substituto — variante "lite" de
+// uma geração já estabelecida, bom equilíbrio pra essa tarefa simples
+// de classificação. Se quiser usar outro, defina GEMINI_MODEL no .env.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 // 12s por tentativa: com MAX_TENTATIVAS=3 + esperas entre elas, o pior
 // caso fica em ~40s, com folga dentro do maxDuration=60s da função na
