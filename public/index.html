@@ -17,18 +17,62 @@
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
-    padding: 2.5rem 1.5rem;
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    display: flex;
-    justify-content: center;
   }
-  .wrap { width: 100%; max-width: 640px; }
   h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   p.subtitle { color: var(--muted); margin: 0 0 1.75rem; font-size: 0.9rem; }
+
+  /* ---------- Layout geral: sidebar + conteúdo principal ---------- */
+  .app-shell { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 1rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .logo { display: flex; align-items: center; gap: 0.55rem; font-weight: 700; margin-bottom: 1.75rem; font-size: 0.95rem; }
+  .logo-badge {
+    width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700;
+  }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; }
+  .nav-item {
+    display: flex; align-items: center; gap: 0.55rem; text-align: left;
+    padding: 0.55rem 0.6rem; border: none; background: transparent; border-radius: 7px;
+    cursor: pointer; font-size: 0.87rem; color: var(--text); width: 100%;
+  }
+  .nav-item.ativo { background: var(--bg); font-weight: 600; }
+  .nav-item:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.55; }
+  .sidebar-footer {
+    display: flex; align-items: center; gap: 0.6rem; padding-top: 1rem;
+    margin-top: 1rem; border-top: 1px solid var(--border); font-size: 0.8rem;
+  }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 999px; background: var(--bg);
+    border: 1px solid var(--border); display: flex; align-items: center;
+    justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;
+  }
+  .cargo { color: var(--muted); font-size: 0.74rem; }
+
+  .main { flex: 1; padding: 2rem 2.5rem; max-width: 960px; }
+  .main-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.25rem; gap: 1rem; flex-wrap: wrap;
+  }
+  .btn-primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 0.6rem 1.1rem; font-size: 0.88rem; cursor: pointer; white-space: nowrap;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
 
   .card {
     background: var(--card);
@@ -37,6 +81,58 @@
     padding: 1.5rem;
     margin-bottom: 1.25rem;
   }
+
+  /* ---------- Tabela "Banco de Questões" ---------- */
+  .tabela-cabecalho {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.85rem; gap: 1rem; flex-wrap: wrap;
+  }
+  .tabela-cabecalho .status { margin: 0; text-align: left; }
+  .tabela-questoes { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .tabela-questoes th {
+    text-align: left; color: var(--muted); font-weight: 600; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tabela-questoes td { padding: 0.65rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .tabela-questoes tr:last-child td { border-bottom: none; }
+  .enunciado-preview {
+    max-width: 380px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; display: block;
+  }
+  .origem-preview { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+  .tabela-vazia { padding: 1.5rem 0; text-align: center; color: var(--muted); font-size: 0.85rem; }
+
+  /* ---------- Drawer "Adicionar questão" ---------- */
+  .drawer-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.28); z-index: 20;
+  }
+  .drawer-overlay.oculto { display: none; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(600px, 94vw);
+    background: #fff; border-left: 1px solid var(--border); z-index: 21;
+    display: flex; flex-direction: column; box-shadow: -10px 0 28px rgba(0,0,0,0.10);
+  }
+  .drawer.oculto { display: none; }
+  .drawer-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .eyebrow { font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.2rem; }
+  .drawer-header h2 { margin: 0; font-size: 1.1rem; }
+  .fechar-drawer {
+    border: 1px solid var(--border); background: #fff; border-radius: 7px;
+    width: 30px; height: 30px; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; color: var(--muted);
+  }
+  .drawer-tabs { display: flex; gap: 0.4rem; padding: 1rem 1.5rem 0; flex-shrink: 0; }
+  .drawer-tab {
+    flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: #fff;
+    border-radius: 8px; cursor: pointer; font-size: 0.82rem; color: var(--muted);
+  }
+  .drawer-tab.ativo { background: var(--text); border-color: var(--text); color: #fff; }
+  .drawer-body { padding: 1.25rem 1.5rem 1.75rem; overflow-y: auto; flex: 1; }
+  .drawer-painel.oculto { display: none; }
+  .drawer-painel > .card:last-child { margin-bottom: 0; }
 
   .tipo-toggle {
     display: flex;
@@ -270,79 +366,168 @@
     margin-top: 0.5rem;
   }
   details.bruto textarea { margin-top: 0.5rem; }
+
+  @media (max-width: 760px) {
+    .sidebar { display: none; }
+    .main { padding: 1.25rem; }
+    .drawer { width: 100vw; }
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Extração de Texto — ProvaFácil FANS</h1>
-    <p class="subtitle">Envie um PDF, DOCX ou imagem de questão e veja o texto extraído pela API.</p>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="logo"><span class="logo-badge">PF</span> ProvaFácil</div>
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-item ativo" data-view="banco">🏠 Início</button>
+        <button type="button" class="nav-item ativo" data-view="banco">📁 Banco de Questões</button>
+        <button type="button" class="nav-item" disabled title="Ainda não implementado">📝 Minhas Provas</button>
+        <button type="button" class="nav-item" disabled title="Ainda não implementado">👤 Perfil</button>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="avatar">P</div>
+        <div>
+          <div class="nome">Professor</div>
+          <div class="cargo">Conta de testes</div>
+        </div>
+      </div>
+    </aside>
 
-    <div class="card">
-      <div class="tipo-toggle">
-        <button type="button" id="btnPdf" class="ativo">PDF</button>
-        <button type="button" id="btnDocx">DOCX</button>
-        <button type="button" id="btnImagem">IMAGEM</button>
+    <main class="main">
+      <header class="main-header">
+        <h1 style="margin:0;">Banco de Questões</h1>
+        <button type="button" class="btn-primary" id="btnAbrirDrawer">+ Adicionar questão</button>
+      </header>
+
+      <div class="card">
+        <div class="tabela-cabecalho">
+          <div class="status" id="statusQuestoes"></div>
+          <button class="enviar" id="btnCarregarQuestoes" style="width:auto;margin-top:0;">Atualizar lista</button>
+        </div>
+        <table class="tabela-questoes">
+          <thead>
+            <tr><th>Cód.</th><th>Enunciado</th><th>Origem</th><th>Data</th><th></th></tr>
+          </thead>
+          <tbody id="listaQuestoes"></tbody>
+        </table>
+      </div>
+    </main>
+
+    <div class="drawer-overlay oculto" id="drawerOverlay"></div>
+    <aside class="drawer oculto" id="drawer">
+      <div class="drawer-header">
+        <div>
+          <div class="eyebrow">Nova questão</div>
+          <h2>Adicionar questão</h2>
+        </div>
+        <button type="button" class="fechar-drawer" id="btnFecharDrawer">✕</button>
       </div>
 
-      <div class="drop-area" id="dropArea">
-        <p><strong>Clique para escolher</strong> ou arraste o arquivo aqui</p>
-        <p id="tipoAceito">Aceita: .pdf</p>
-        <input type="file" id="inputArquivo" accept=".pdf">
+      <div class="drawer-tabs">
+        <button type="button" class="drawer-tab ativo" data-tab="texto">≡ Texto</button>
+        <button type="button" class="drawer-tab" data-tab="upload">⬆ Upload</button>
+        <button type="button" class="drawer-tab" data-tab="email">✉ E-mail</button>
       </div>
-      <button type="button" class="enviar oculto" id="btnTirarFoto" style="background:#fff;color:var(--accent);border:1px solid var(--accent);margin-top:0.6rem;">📷 Tirar foto agora</button>
-      <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none;">
-      <div id="nomeArquivo"></div>
 
-      <button class="enviar" id="btnEnviar" disabled>Extrair texto</button>
-      <div class="status" id="status"></div>
-    </div>
+      <div class="drawer-body">
+        <!-- Aba: Texto (escrever ou colar) -->
+        <div class="drawer-painel" data-painel="texto">
+          <div class="card">
+            <p class="subtitle" style="margin-bottom:1rem;">
+              Digite ou cole o texto (pode ser uma única questão ou uma prova inteira com várias). O
+              sistema identifica e separa automaticamente cada questão.
+            </p>
+            <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva ou cole aqui o texto da(s) questão(ões)..."></div>
+            <button class="enviar" id="btnSalvarEditada">Identificar questões</button>
+            <div class="status" id="statusEditada"></div>
+            <div id="listaQuestoesIdentificadasManual"></div>
+          </div>
+        </div>
 
-    <div class="card resultado oculto" id="cardResultado">
-      <h2>
-        Questões identificadas
-        <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
-      </h2>
-      <div class="meta" id="meta"></div>
-      <div class="status" id="statusIdentificacao"></div>
-      <div id="listaQuestoesIdentificadas"></div>
-      <details class="bruto">
-        <summary>Ver texto bruto extraído (para conferência)</summary>
-        <textarea id="textoExtraido" readonly></textarea>
-      </details>
-    </div>
+        <!-- Aba: Upload (PDF/DOCX/imagem) -->
+        <div class="drawer-painel oculto" data-painel="upload">
+          <div class="card">
+            <div class="tipo-toggle">
+              <button type="button" id="btnPdf" class="ativo">PDF</button>
+              <button type="button" id="btnDocx">DOCX</button>
+              <button type="button" id="btnImagem">IMAGEM</button>
+            </div>
 
-    <div class="card">
-      <h1 style="font-size:1rem;">Escrever ou colar questão(ões)</h1>
-      <p class="subtitle" style="margin-bottom:1rem;">
-        Digite ou cole o texto (pode ser uma única questão ou uma prova inteira com várias) e use
-        a barra para formatar. O sistema identifica e separa automaticamente cada questão, do
-        mesmo jeito que faz com arquivos enviados.
-      </p>
-      <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva ou cole aqui o texto da(s) questão(ões)..."></div>
-      <button class="enviar" id="btnSalvarEditada">Identificar questões</button>
-      <div class="status" id="statusEditada"></div>
-      <div id="listaQuestoesIdentificadasManual"></div>
-    </div>
+            <div class="drop-area" id="dropArea">
+              <p><strong>Clique para escolher</strong> ou arraste o arquivo aqui</p>
+              <p id="tipoAceito">Aceita: .pdf</p>
+              <input type="file" id="inputArquivo" accept=".pdf">
+            </div>
+            <button type="button" class="enviar oculto" id="btnTirarFoto" style="background:#fff;color:var(--accent);border:1px solid var(--accent);margin-top:0.6rem;">📷 Tirar foto agora</button>
+            <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none;">
+            <div id="nomeArquivo"></div>
 
-    <div class="card">
-      <h1 style="font-size:1rem;">Verificar e-mails</h1>
-    <p class="subtitle" style="margin-bottom:1rem;">Busca questões recebidas por e-mail (corpo + anexos PDF, DOCX ou imagem) e marca como lidas.</p>
-      <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
-      <div class="status" id="statusEmail"></div>
-      <div id="listaEmails"></div>
-    </div>
+            <button class="enviar" id="btnEnviar" disabled>Extrair texto</button>
+            <div class="status" id="status"></div>
+          </div>
 
-    <div class="card">
-      <h1 style="font-size:1rem;">Questões salvas</h1>
-      <p class="subtitle" style="margin-bottom:1rem;">Últimas questões persistidas no Cloud Firestore.</p>
-      <button class="enviar" id="btnCarregarQuestoes">Atualizar lista</button>
-      <div class="status" id="statusQuestoes"></div>
-      <div id="listaQuestoes"></div>
-    </div>
+          <div class="card resultado oculto" id="cardResultado">
+            <h2>
+              Questões identificadas
+              <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
+            </h2>
+            <div class="meta" id="meta"></div>
+            <div class="status" id="statusIdentificacao"></div>
+            <div id="listaQuestoesIdentificadas"></div>
+            <details class="bruto">
+              <summary>Ver texto bruto extraído (para conferência)</summary>
+              <textarea id="textoExtraido" readonly></textarea>
+            </details>
+          </div>
+        </div>
+
+        <!-- Aba: E-mail -->
+        <div class="drawer-painel oculto" data-painel="email">
+          <div class="card">
+            <p class="subtitle" style="margin-bottom:1rem;">Busca questões recebidas por e-mail (corpo + anexos PDF, DOCX ou imagem) e marca como lidas.</p>
+            <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
+            <div class="status" id="statusEmail"></div>
+            <div id="listaEmails"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
   </div>
 
 <script>
   const API_BASE = window.location.origin;
+
+  /* ---------- Sidebar / navegação (só "Banco de Questões" está
+     implementado; os outros itens ficam desabilitados por enquanto) ---------- */
+
+  /* ---------- Drawer "Adicionar questão": abrir/fechar e trocar de aba ---------- */
+  const drawerEl = document.getElementById('drawer');
+  const drawerOverlayEl = document.getElementById('drawerOverlay');
+  const btnAbrirDrawer = document.getElementById('btnAbrirDrawer');
+  const btnFecharDrawer = document.getElementById('btnFecharDrawer');
+
+  function abrirDrawer() {
+    drawerEl.classList.remove('oculto');
+    drawerOverlayEl.classList.remove('oculto');
+  }
+  function fecharDrawer() {
+    drawerEl.classList.add('oculto');
+    drawerOverlayEl.classList.add('oculto');
+  }
+  btnAbrirDrawer.addEventListener('click', abrirDrawer);
+  btnFecharDrawer.addEventListener('click', fecharDrawer);
+  drawerOverlayEl.addEventListener('click', fecharDrawer);
+
+  document.querySelectorAll('.drawer-tab').forEach((botaoAba) => {
+    botaoAba.addEventListener('click', () => {
+      document.querySelectorAll('.drawer-tab').forEach((b) => b.classList.remove('ativo'));
+      botaoAba.classList.add('ativo');
+      const abaAlvo = botaoAba.dataset.tab;
+      document.querySelectorAll('.drawer-painel').forEach((painel) => {
+        painel.classList.toggle('oculto', painel.dataset.painel !== abaAlvo);
+      });
+    });
+  });
 
   const btnPdf = document.getElementById('btnPdf');
   const btnDocx = document.getElementById('btnDocx');
@@ -535,7 +720,8 @@
       statusEl.textContent = '';
       return;
     }
-    statusEl.textContent = 'Identificando questões no texto...';
+
+    statusEl.textContent = 'Identificando questões...';
     statusEl.className = 'status';
 
     let questoes = [];
@@ -547,7 +733,7 @@
         body: JSON.stringify({ texto: textoBruto }),
       });
       const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'Falha ao identificar questões.');
+      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível identificar as questões.');
       questoes = dados.questoes || [];
       correcaoAplicada = dados.correcaoAplicada !== false;
     } catch (err) {
@@ -728,6 +914,9 @@
   const statusQuestoesEl = document.getElementById('statusQuestoes');
   const listaQuestoesEl = document.getElementById('listaQuestoes');
 
+  // Renderiza a lista de questões salvas como linhas de tabela (Cód.,
+  // Enunciado, Origem, Data, Ações) — o "Cód." é só a posição na lista
+  // (1, 2, 3...), não um código de verdade gerado pelo banco.
   async function carregarQuestoes() {
     statusQuestoesEl.textContent = 'Carregando...';
     statusQuestoesEl.className = 'status';
@@ -735,19 +924,33 @@
       const resposta = await fetch(API_BASE + '/api/questoes');
       const dados = await resposta.json();
       if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível carregar as questões.');
-      listaQuestoesEl.innerHTML = (dados.questoes || []).map((questao) => `
-        <div class="email-item">
-          <div class="assunto">${escapeHtml(questao.nomeArquivo || 'Questão salva')}</div>
-          <div class="remetente">${escapeHtml(questao.criadoEm ? new Date(questao.criadoEm).toLocaleString('pt-BR') : '')}</div>
-          <div class="corpo">${escapeHtml(questao.texto || '')}</div>
-          <button class="excluir excluir-questao" data-id="${escapeHtml(questao.id)}">Excluir questão</button>
-          <div class="confirmacao-exclusao oculto">
-            <span>Excluir esta questão permanentemente?</span>
-            <button class="confirmar-exclusao">Confirmar exclusão</button>
-            <button class="cancelar-exclusao">Cancelar</button>
-          </div>
-        </div>
-      `).join('') || '<div class="status">Nenhuma questão salva ainda.</div>';
+
+      if (!dados.questoes || dados.questoes.length === 0) {
+        listaQuestoesEl.innerHTML = '<tr><td colspan="5" class="tabela-vazia">Nenhuma questão salva ainda.</td></tr>';
+      } else {
+        listaQuestoesEl.innerHTML = dados.questoes.map((questao, indice) => {
+          const enunciadoCompleto = (questao.texto || '').replace(/\s+/g, ' ').trim();
+          const preview = enunciadoCompleto.length > 90 ? enunciadoCompleto.slice(0, 90) + '…' : enunciadoCompleto;
+          const dataFormatada = questao.criadoEm ? new Date(questao.criadoEm).toLocaleDateString('pt-BR') : '—';
+          return `
+            <tr>
+              <td>Q${indice + 1}</td>
+              <td><span class="enunciado-preview" title="${escapeHtml(enunciadoCompleto)}">${escapeHtml(preview || '(vazio)')}</span></td>
+              <td class="origem-preview">${escapeHtml(questao.tipoOrigem || questao.nomeArquivo || '—')}</td>
+              <td class="origem-preview">${escapeHtml(dataFormatada)}</td>
+              <td>
+                <button class="excluir excluir-questao" data-id="${escapeHtml(questao.id)}">Excluir</button>
+                <div class="confirmacao-exclusao oculto">
+                  <span>Excluir esta questão permanentemente?</span>
+                  <button class="confirmar-exclusao">Confirmar</button>
+                  <button class="cancelar-exclusao">Cancelar</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
       statusQuestoesEl.textContent = `${dados.questoes.length} questão(ões) carregada(s).`;
       statusQuestoesEl.className = 'status ok';
       listaQuestoesEl.querySelectorAll('.excluir-questao').forEach((botao) => botao.addEventListener('click', () => {
@@ -762,14 +965,14 @@
       }));
       listaQuestoesEl.querySelectorAll('.confirmar-exclusao').forEach((botao) => botao.addEventListener('click', async () => {
         const confirmacao = botao.closest('.confirmacao-exclusao');
-        const item = confirmacao.parentElement;
-        const excluirBotao = item.querySelector('.excluir-questao');
+        const linha = confirmacao.closest('tr');
+        const excluirBotao = linha.querySelector('.excluir-questao');
         botao.disabled = true;
         try {
           const resposta = await fetch(API_BASE + '/api/questoes/' + encodeURIComponent(excluirBotao.dataset.id), { method: 'DELETE' });
           const erro = await resposta.json();
           if (!resposta.ok) throw new Error(erro.erro || 'Não foi possível excluir a questão.');
-          item.remove();
+          linha.remove();
           statusQuestoesEl.textContent = 'Questão excluída com sucesso.';
           statusQuestoesEl.className = 'status ok';
         } catch (err) {
@@ -784,6 +987,7 @@
   }
 
   btnCarregarQuestoes.addEventListener('click', carregarQuestoes);
+  carregarQuestoes();
 
   const btnVerificarEmail = document.getElementById('btnVerificarEmail');
   const statusEmailEl = document.getElementById('statusEmail');
