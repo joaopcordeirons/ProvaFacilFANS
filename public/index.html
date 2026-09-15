@@ -4,405 +4,55 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ProvaFácil FANS — Testar Extração de Texto</title>
-<style>
-  :root {
-    --bg: #f5f5f7;
-    --card: #ffffff;
-    --border: #e2e2e6;
-    --text: #1d1d1f;
-    --muted: #6e6e73;
-    --accent: #2f6feb;
-    --accent-hover: #2558c4;
-    --error: #d92c2c;
-    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
-  p.subtitle { color: var(--muted); margin: 0 0 1.75rem; font-size: 0.9rem; }
-
-  /* ---------- Layout geral: sidebar + conteúdo principal ---------- */
-  .app-shell { display: flex; min-height: 100vh; }
-
-  .sidebar {
-    width: 220px;
-    flex-shrink: 0;
-    background: var(--card);
-    border-right: 1px solid var(--border);
-    padding: 1.25rem 1rem;
-    display: flex;
-    flex-direction: column;
-  }
-  .logo { display: flex; align-items: center; gap: 0.55rem; font-weight: 700; margin-bottom: 1.75rem; font-size: 0.95rem; }
-  .logo-badge {
-    width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700;
-  }
-  .sidebar-nav { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; }
-  .nav-item {
-    display: flex; align-items: center; gap: 0.55rem; text-align: left;
-    padding: 0.55rem 0.6rem; border: none; background: transparent; border-radius: 7px;
-    cursor: pointer; font-size: 0.87rem; color: var(--text); width: 100%;
-  }
-  .nav-item.ativo { background: var(--bg); font-weight: 600; }
-  .nav-item:disabled { color: var(--muted); cursor: not-allowed; opacity: 0.55; }
-  .sidebar-footer {
-    display: flex; align-items: center; gap: 0.6rem; padding-top: 1rem;
-    margin-top: 1rem; border-top: 1px solid var(--border); font-size: 0.8rem;
-  }
-  .avatar {
-    width: 32px; height: 32px; border-radius: 999px; background: var(--bg);
-    border: 1px solid var(--border); display: flex; align-items: center;
-    justify-content: center; font-weight: 600; font-size: 0.8rem; flex-shrink: 0;
-  }
-  .cargo { color: var(--muted); font-size: 0.74rem; }
-
-  .main { flex: 1; padding: 2rem 2.5rem; max-width: 960px; }
-  .main-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1.25rem; gap: 1rem; flex-wrap: wrap;
-  }
-  .btn-primary {
-    background: var(--accent); color: #fff; border: none; border-radius: 8px;
-    padding: 0.6rem 1.1rem; font-size: 0.88rem; cursor: pointer; white-space: nowrap;
-  }
-  .btn-primary:hover { background: var(--accent-hover); }
-
-  .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1.25rem;
-  }
-
-  /* ---------- Tabela "Banco de Questões" ---------- */
-  .tabela-cabecalho {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 0.85rem; gap: 1rem; flex-wrap: wrap;
-  }
-  .tabela-cabecalho .status { margin: 0; text-align: left; }
-  .tabela-questoes { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .tabela-questoes th {
-    text-align: left; color: var(--muted); font-weight: 600; font-size: 0.7rem;
-    text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.4rem;
-    border-bottom: 1px solid var(--border);
-  }
-  .tabela-questoes td { padding: 0.65rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .tabela-questoes tr:last-child td { border-bottom: none; }
-  .enunciado-preview {
-    max-width: 380px; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; display: block;
-  }
-  .origem-preview { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
-  .tabela-vazia { padding: 1.5rem 0; text-align: center; color: var(--muted); font-size: 0.85rem; }
-
-  /* ---------- Drawer "Adicionar questão" ---------- */
-  .drawer-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.28); z-index: 20;
-  }
-  .drawer-overlay.oculto { display: none; }
-  .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: min(600px, 94vw);
-    background: #fff; border-left: 1px solid var(--border); z-index: 21;
-    display: flex; flex-direction: column; box-shadow: -10px 0 28px rgba(0,0,0,0.10);
-  }
-  .drawer.oculto { display: none; }
-  .drawer-header {
-    display: flex; justify-content: space-between; align-items: flex-start;
-    padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); flex-shrink: 0;
-  }
-  .eyebrow { font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.2rem; }
-  .drawer-header h2 { margin: 0; font-size: 1.1rem; }
-  .fechar-drawer {
-    border: 1px solid var(--border); background: #fff; border-radius: 7px;
-    width: 30px; height: 30px; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; color: var(--muted);
-  }
-  .drawer-tabs { display: flex; gap: 0.4rem; padding: 1rem 1.5rem 0; flex-shrink: 0; }
-  .drawer-tab {
-    flex: 1; padding: 0.5rem; border: 1px solid var(--border); background: #fff;
-    border-radius: 8px; cursor: pointer; font-size: 0.82rem; color: var(--muted);
-  }
-  .drawer-tab.ativo { background: var(--text); border-color: var(--text); color: #fff; }
-  .drawer-body { padding: 1.25rem 1.5rem 1.75rem; overflow-y: auto; flex: 1; }
-  .drawer-painel.oculto { display: none; }
-  .drawer-painel > .card:last-child { margin-bottom: 0; }
-
-  .tipo-toggle {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-  .tipo-toggle button {
-    flex: 1;
-    padding: 0.5rem;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--muted);
-  }
-  .tipo-toggle button.ativo {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
-
-  .drop-area {
-    border: 2px dashed var(--border);
-    border-radius: 10px;
-    padding: 2rem 1rem;
-    text-align: center;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
-  .drop-area.arrastando { border-color: var(--accent); background: #eef3fe; }
-  .drop-area p { margin: 0.25rem 0; color: var(--muted); font-size: 0.9rem; }
-  .drop-area strong { color: var(--text); }
-  input[type="file"] { display: none; }
-
-  #nomeArquivo {
-    margin-top: 0.75rem;
-    font-size: 0.85rem;
-    color: var(--text);
-    text-align: center;
-    min-height: 1.2em;
-  }
-
-  button.enviar {
-    width: 100%;
-    margin-top: 1rem;
-    padding: 0.7rem;
-    border: none;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  button.enviar:hover { background: var(--accent-hover); }
-  button.enviar:disabled { background: #b7c6e8; cursor: not-allowed; }
-
-  .status { font-size: 0.85rem; margin-top: 0.75rem; text-align: center; min-height: 1.2em; }
-  .status.erro { color: var(--error); }
-  .status.ok { color: #1a7a3d; }
-
-  .resultado h2 {
-    font-size: 0.95rem;
-    margin: 0 0 0.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .meta { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.75rem; }
-  textarea {
-    width: 100%;
-    min-height: 260px;
-    padding: 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-size: 0.85rem;
-    line-height: 1.4;
-    resize: vertical;
-  }
-  .copiar {
-    border: 1px solid var(--border);
-    background: var(--bg);
-    border-radius: 6px;
-    padding: 0.3rem 0.7rem;
-    font-size: 0.75rem;
-    cursor: pointer;
-    color: var(--text);
-  }
-  .salvar {
-    border: 1px solid #1a7a3d;
-    background: #eefaf1;
-    color: #1a7a3d;
-    border-radius: 6px;
-    padding: 0.3rem 0.7rem;
-    font-size: 0.75rem;
-    cursor: pointer;
-    margin-left: 0.35rem;
-  }
-  .salvar:disabled { opacity: 0.55; cursor: not-allowed; }
-  .excluir {
-    border: 1px solid #d92c2c;
-    background: #fff5f5;
-    color: #d92c2c;
-    border-radius: 6px;
-    padding: 0.3rem 0.7rem;
-    font-size: 0.75rem;
-    cursor: pointer;
-    margin-left: 0.35rem;
-  }
-  .confirmacao-exclusao {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    margin-top: 0.65rem;
-    padding: 0.55rem 0.7rem;
-    border: 1px solid #f0b7b7;
-    border-radius: 7px;
-    background: #fff5f5;
-    color: #8f1d1d;
-    font-size: 0.8rem;
-  }
-  .confirmacao-exclusao button {
-    border-radius: 5px;
-    padding: 0.3rem 0.55rem;
-    cursor: pointer;
-    font-size: 0.75rem;
-  }
-  .confirmar-exclusao {
-    border: 1px solid #d92c2c;
-    background: #d92c2c;
-    color: #fff;
-  }
-  .cancelar-exclusao {
-    border: 1px solid var(--border);
-    background: #fff;
-    color: var(--text);
-  }
-  .editor {
-    min-height: 230px;
-    padding: 0.85rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    outline: none;
-    line-height: 1.5;
-    background: #fff;
-  }
-  .editor:focus { border-color: var(--accent); box-shadow: 0 0 0 2px #eef3fe; }
-  .editor:empty::before { content: attr(data-placeholder); color: var(--muted); }
-  .status-inline { margin-top: 0.55rem; font-size: 0.8rem; }
-  .status-inline.erro { color: var(--error); }
-  .oculto { display: none; }
-
-  .email-item {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-top: 0.75rem;
-    font-size: 0.85rem;
-  }
-  .email-item .assunto { font-weight: 600; margin-bottom: 0.15rem; }
-  .email-item .remetente { color: var(--muted); font-size: 0.78rem; margin-bottom: 0.5rem; }
-  .email-item .corpo { white-space: pre-wrap; margin-bottom: 0.5rem; }
-  .email-item .anexo { border-top: 1px dashed var(--border); padding-top: 0.5rem; margin-top: 0.5rem; }
-  .email-item .anexo-nome { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
-
-  .questao-candidata {
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
-    background: #fff;
-  }
-  .questao-candidata.salva { border-color: #1a7a3d; background: #f3fbf5; }
-  .questao-candidata-cabecalho {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.85rem;
-  }
-  .badge {
-    font-size: 0.7rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .questao-candidata textarea {
-    min-height: 120px;
-    font-family: inherit;
-    font-size: 0.85rem;
-  }
-  .questao-candidata .acoes { margin-top: 0.5rem; }
-  .questao-candidata .acoes button.verificar {
-    background: #fff;
-    border: 1px solid var(--border);
-    color: var(--muted);
-  }
-  .questao-candidata .acoes button.corrigir {
-    background: #fff;
-    border: 1px solid #2563eb;
-    color: #2563eb;
-  }
-  .questao-candidata .acoes button.corrigir:disabled { opacity: 0.55; cursor: not-allowed; }
-  .verificacao-conteudo {
-    margin-top: 0.5rem;
-    font-size: 0.82rem;
-    padding: 0.5rem 0.65rem;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-  }
-  .verificacao-conteudo.ok { border-color: #1a7a3d; background: #f3fbf5; color: #1a7a3d; }
-  .verificacao-conteudo.alerta { border-color: #b45309; background: #fffbeb; color: #92400e; }
-  .verificacao-conteudo.indisponivel { color: var(--muted); font-style: italic; }
-  .aviso-identificacao {
-    font-size: 0.82rem;
-    color: var(--muted);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0.6rem 0.75rem;
-    margin-bottom: 0.75rem;
-  }
-  details.bruto summary {
-    cursor: pointer;
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 0.5rem;
-  }
-  details.bruto textarea { margin-top: 0.5rem; }
-
-  @media (max-width: 760px) {
-    .sidebar { display: none; }
-    .main { padding: 1.25rem; }
-    .drawer { width: 100vw; }
-  }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="logo"><span class="logo-badge">PF</span> ProvaFácil</div>
+      <div class="logo">
+        <span class="logo-mark">P</span>
+        <span class="logo-nome">ProvaFácil</span>
+      </div>
       <nav class="sidebar-nav">
-        <button type="button" class="nav-item ativo" data-view="banco">🏠 Início</button>
-        <button type="button" class="nav-item ativo" data-view="banco">📁 Banco de Questões</button>
-        <button type="button" class="nav-item" disabled title="Ainda não implementado">📝 Minhas Provas</button>
-        <button type="button" class="nav-item" disabled title="Ainda não implementado">👤 Perfil</button>
+        <button type="button" class="nav-item ativo" data-view="banco">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><path d="M1.5 6h13"/></svg>
+          Início
+        </button>
+        <button type="button" class="nav-item ativo" data-view="banco">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5V11A1.5 1.5 0 0 1 13 12.5H3A1.5 1.5 0 0 1 1.5 11z"/></svg>
+          Banco de Questões
+        </button>
+        <button type="button" class="nav-item" disabled title="Ainda não implementado">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="1.5" width="11" height="13" rx="1.2"/><path d="M5 5h6M5 8h6M5 11h3.5"/></svg>
+          Minhas Provas
+        </button>
+        <button type="button" class="nav-item" disabled title="Ainda não implementado">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.2" r="2.7"/><path d="M2.5 14c0-2.8 2.5-4.7 5.5-4.7s5.5 1.9 5.5 4.7"/></svg>
+          Perfil
+        </button>
       </nav>
       <div class="sidebar-footer">
         <div class="avatar">P</div>
         <div>
-          <div class="nome">Professor</div>
-          <div class="cargo">Conta de testes</div>
+          <div class="conta-nome">Professor</div>
+          <div class="conta-legenda">conta de testes</div>
         </div>
       </div>
     </aside>
 
     <main class="main">
       <header class="main-header">
-        <h1 style="margin:0;">Banco de Questões</h1>
-        <button type="button" class="btn-primary" id="btnAbrirDrawer">+ Adicionar questão</button>
+        <h1>Banco de Questões</h1>
+        <button type="button" class="btn-primary" id="btnAbrirDrawer">Adicionar questão</button>
       </header>
 
-      <div class="card">
+      <div class="panel">
         <div class="tabela-cabecalho">
-          <div class="status" id="statusQuestoes"></div>
-          <button class="enviar" id="btnCarregarQuestoes" style="width:auto;margin-top:0;">Atualizar lista</button>
+          <div class="status" id="statusQuestoes" style="margin:0;"></div>
+          <button type="button" class="link-acao" id="btnCarregarQuestoes">Atualizar lista</button>
         </div>
         <table class="tabela-questoes">
           <thead>
@@ -416,26 +66,25 @@
     <div class="drawer-overlay oculto" id="drawerOverlay"></div>
     <aside class="drawer oculto" id="drawer">
       <div class="drawer-header">
-        <div>
-          <div class="eyebrow">Nova questão</div>
-          <h2>Adicionar questão</h2>
-        </div>
-        <button type="button" class="fechar-drawer" id="btnFecharDrawer">✕</button>
+        <h2>Adicionar questão</h2>
+        <button type="button" class="fechar-drawer" id="btnFecharDrawer" aria-label="Fechar">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1 1l11 11M12 1L1 12"/></svg>
+        </button>
       </div>
 
       <div class="drawer-tabs">
-        <button type="button" class="drawer-tab ativo" data-tab="texto">≡ Texto</button>
-        <button type="button" class="drawer-tab" data-tab="upload">⬆ Upload</button>
-        <button type="button" class="drawer-tab" data-tab="email">✉ E-mail</button>
+        <button type="button" class="drawer-tab ativo" data-tab="texto">Texto</button>
+        <button type="button" class="drawer-tab" data-tab="upload">Upload</button>
+        <button type="button" class="drawer-tab" data-tab="email">E-mail</button>
       </div>
 
       <div class="drawer-body">
         <!-- Aba: Texto (escrever ou colar) -->
         <div class="drawer-painel" data-painel="texto">
-          <div class="card">
-            <p class="subtitle" style="margin-bottom:1rem;">
-              Digite ou cole o texto (pode ser uma única questão ou uma prova inteira com várias). O
-              sistema identifica e separa automaticamente cada questão.
+          <div class="panel">
+            <p class="subtitle">
+              Digite ou cole o texto — uma única questão ou uma prova inteira com várias. O sistema
+              identifica e separa cada questão automaticamente.
             </p>
             <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva ou cole aqui o texto da(s) questão(ões)..."></div>
             <button class="enviar" id="btnSalvarEditada">Identificar questões</button>
@@ -446,11 +95,11 @@
 
         <!-- Aba: Upload (PDF/DOCX/imagem) -->
         <div class="drawer-painel oculto" data-painel="upload">
-          <div class="card">
+          <div class="panel">
             <div class="tipo-toggle">
               <button type="button" id="btnPdf" class="ativo">PDF</button>
               <button type="button" id="btnDocx">DOCX</button>
-              <button type="button" id="btnImagem">IMAGEM</button>
+              <button type="button" id="btnImagem">Imagem</button>
             </div>
 
             <div class="drop-area" id="dropArea">
@@ -458,7 +107,7 @@
               <p id="tipoAceito">Aceita: .pdf</p>
               <input type="file" id="inputArquivo" accept=".pdf">
             </div>
-            <button type="button" class="enviar oculto" id="btnTirarFoto" style="background:#fff;color:var(--accent);border:1px solid var(--accent);margin-top:0.6rem;">📷 Tirar foto agora</button>
+            <button type="button" class="enviar secundario oculto" id="btnTirarFoto">Tirar foto agora</button>
             <input type="file" id="inputFoto" accept="image/*" capture="environment" style="display:none;">
             <div id="nomeArquivo"></div>
 
@@ -466,7 +115,7 @@
             <div class="status" id="status"></div>
           </div>
 
-          <div class="card resultado oculto" id="cardResultado">
+          <div class="panel resultado oculto" id="cardResultado">
             <h2>
               Questões identificadas
               <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
@@ -483,8 +132,8 @@
 
         <!-- Aba: E-mail -->
         <div class="drawer-painel oculto" data-painel="email">
-          <div class="card">
-            <p class="subtitle" style="margin-bottom:1rem;">Busca questões recebidas por e-mail (corpo + anexos PDF, DOCX ou imagem) e marca como lidas.</p>
+          <div class="panel">
+            <p class="subtitle">Busca questões recebidas por e-mail — corpo e anexos em PDF, DOCX ou imagem — e marca como lidas.</p>
             <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
             <div class="status" id="statusEmail"></div>
             <div id="listaEmails"></div>
@@ -496,9 +145,6 @@
 
 <script>
   const API_BASE = window.location.origin;
-
-  /* ---------- Sidebar / navegação (só "Banco de Questões" está
-     implementado; os outros itens ficam desabilitados por enquanto) ---------- */
 
   /* ---------- Drawer "Adicionar questão": abrir/fechar e trocar de aba ---------- */
   const drawerEl = document.getElementById('drawer');
@@ -681,7 +327,7 @@
   btnCopiar.addEventListener('click', () => {
     textoEl.select();
     document.execCommand('copy');
-    btnCopiar.textContent = 'Copiado!';
+    btnCopiar.textContent = 'Copiado';
     setTimeout(() => (btnCopiar.textContent = 'Copiar texto bruto'), 1500);
   });
 
@@ -813,10 +459,10 @@
             caixaVerificacao.textContent = dados.motivo || 'Verificação indisponível no momento.';
           } else if (dados.coerente) {
             caixaVerificacao.className = 'verificacao-conteudo ok';
-            caixaVerificacao.textContent = `✓ O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
+            caixaVerificacao.textContent = `O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
           } else {
             caixaVerificacao.className = 'verificacao-conteudo alerta';
-            caixaVerificacao.textContent = `⚠ Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
+            caixaVerificacao.textContent = `Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
           }
         } catch (err) {
           caixaVerificacao.className = 'verificacao-conteudo indisponivel';
@@ -862,14 +508,15 @@
             textareaEl.value = partes.join('\n').trim();
             // Se o backend sinalizou que o texto encolheu muito (possível
             // apagamento de conteúdo real, não só ruído), mostra em
-            // destaque (laranja) em vez do "ok" normal (verde).
-            const possivelPerdaDeConteudo = dados.observacao && dados.observacao.startsWith('⚠');
+            // destaque (âmbar) em vez do "ok" normal.
+            const possivelPerdaDeConteudo = (dados.observacao || '').toLowerCase().startsWith('[atenção]');
+            const observacaoLimpa = (dados.observacao || '').replace(/^\[atenção\]\s*/i, '');
             caixaVerificacao.className = possivelPerdaDeConteudo
               ? 'verificacao-conteudo alerta'
               : 'verificacao-conteudo ok';
-            caixaVerificacao.textContent = dados.observacao
-              ? `${possivelPerdaDeConteudo ? '' : '✓ Corrigido: '}${dados.observacao} Revise antes de salvar.`
-              : '✓ A IA não encontrou nada pra corrigir aqui.';
+            caixaVerificacao.textContent = observacaoLimpa
+              ? `${possivelPerdaDeConteudo ? '' : 'Corrigido: '}${observacaoLimpa} Revise antes de salvar.`
+              : 'A IA não encontrou nada pra corrigir aqui.';
           }
         } catch (err) {
           caixaVerificacao.className = 'verificacao-conteudo indisponivel';
@@ -916,7 +563,7 @@
 
   // Renderiza a lista de questões salvas como linhas de tabela (Cód.,
   // Enunciado, Origem, Data, Ações) — o "Cód." é só a posição na lista
-  // (1, 2, 3...), não um código de verdade gerado pelo banco.
+  // (Q1, Q2, Q3...), não um código de verdade gerado pelo banco.
   async function carregarQuestoes() {
     statusQuestoesEl.textContent = 'Carregando...';
     statusQuestoesEl.className = 'status';
@@ -934,7 +581,7 @@
           const dataFormatada = questao.criadoEm ? new Date(questao.criadoEm).toLocaleDateString('pt-BR') : '—';
           return `
             <tr>
-              <td>Q${indice + 1}</td>
+              <td class="codigo-questao">Q${indice + 1}</td>
               <td><span class="enunciado-preview" title="${escapeHtml(enunciadoCompleto)}">${escapeHtml(preview || '(vazio)')}</span></td>
               <td class="origem-preview">${escapeHtml(questao.tipoOrigem || questao.nomeArquivo || '—')}</td>
               <td class="origem-preview">${escapeHtml(dataFormatada)}</td>

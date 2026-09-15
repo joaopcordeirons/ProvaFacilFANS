@@ -77,7 +77,7 @@ async function corrigirComIA({ enunciado, alternativas }) {
       enunciado: resultado.enunciado,
       alternativas: alternativasCorrigidas,
       observacao: encolheuMuito
-        ? `⚠ O texto ficou bem mais curto que o original — confira com atenção se nada de conteúdo real (uma alternativa, uma resposta) foi apagado por engano. ${resultado.observacao || ''}`.trim()
+        ? `[atenção] O texto ficou bem mais curto que o original — confira com atenção se nada de conteúdo real (uma alternativa, uma resposta) foi apagado por engano. ${resultado.observacao || ''}`.trim()
         : (resultado.observacao || ''),
     };
   } catch (err) {
