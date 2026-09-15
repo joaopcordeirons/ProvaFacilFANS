@@ -708,9 +708,15 @@
               partes.push('', ...dados.alternativas);
             }
             textareaEl.value = partes.join('\n').trim();
-            caixaVerificacao.className = 'verificacao-conteudo ok';
+            // Se o backend sinalizou que o texto encolheu muito (possível
+            // apagamento de conteúdo real, não só ruído), mostra em
+            // destaque (laranja) em vez do "ok" normal (verde).
+            const possivelPerdaDeConteudo = dados.observacao && dados.observacao.startsWith('⚠');
+            caixaVerificacao.className = possivelPerdaDeConteudo
+              ? 'verificacao-conteudo alerta'
+              : 'verificacao-conteudo ok';
             caixaVerificacao.textContent = dados.observacao
-              ? `✓ Corrigido: ${dados.observacao} Revise antes de salvar.`
+              ? `${possivelPerdaDeConteudo ? '' : '✓ Corrigido: '}${dados.observacao} Revise antes de salvar.`
               : '✓ A IA não encontrou nada pra corrigir aqui.';
           }
         } catch (err) {
