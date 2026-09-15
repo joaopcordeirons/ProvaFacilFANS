@@ -635,8 +635,13 @@
         caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
         try {
           // Usa o texto atual do textarea (o professor pode já ter editado).
-          const [enunciadoAtual, ...restoLinhas] = textareaEl.value.split('\n');
-          const alternativasAtuais = restoLinhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+          // Separa linhas de alternativa (A), B) etc.) do resto, mas
+          // MANTÉM todas as outras linhas juntas no enunciado — questões
+          // dissertativas longas (vindas do PDF) podem ocupar várias
+          // linhas, e usar só a primeira cortava o texto pela metade.
+          const linhas = textareaEl.value.split('\n');
+          const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+          const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
           const resposta = await fetch(API_BASE + '/api/questoes/verificar-conteudo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
