@@ -176,29 +176,11 @@
     background: #fff;
     color: var(--text);
   }
-  .editor-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    padding: 0.6rem;
-    border: 1px solid var(--border);
-    border-bottom: 0;
-    border-radius: 8px 8px 0 0;
-    background: var(--bg);
-  }
-  .editor-toolbar button, .editor-toolbar select {
-    border: 1px solid var(--border);
-    background: #fff;
-    border-radius: 5px;
-    padding: 0.35rem 0.5rem;
-    cursor: pointer;
-    color: var(--text);
-  }
   .editor {
     min-height: 230px;
     padding: 0.85rem;
     border: 1px solid var(--border);
-    border-radius: 0 0 8px 8px;
+    border-radius: 8px;
     outline: none;
     line-height: 1.5;
     background: #fff;
@@ -336,22 +318,6 @@
         a barra para formatar. O sistema identifica e separa automaticamente cada questão, do
         mesmo jeito que faz com arquivos enviados.
       </p>
-      <div class="editor-toolbar" id="editorToolbar">
-        <button type="button" data-command="bold"><strong>B</strong></button>
-        <button type="button" data-command="italic"><em>I</em></button>
-        <button type="button" data-command="underline"><u>U</u></button>
-        <button type="button" data-command="insertUnorderedList">Lista</button>
-        <button type="button" data-command="insertOrderedList">Numerada</button>
-        <button type="button" data-command="justifyLeft">Esquerda</button>
-        <button type="button" data-command="justifyCenter">Centro</button>
-        <button type="button" data-command="justifyRight">Direita</button>
-        <select id="editorFormato" aria-label="Formato do texto">
-          <option value="p">Parágrafo</option>
-          <option value="h2">Título</option>
-          <option value="h3">Subtítulo</option>
-          <option value="blockquote">Citação</option>
-        </select>
-      </div>
       <div id="editorQuestao" class="editor" contenteditable="true" spellcheck="true" data-placeholder="Escreva ou cole aqui o texto da(s) questão(ões)..."></div>
       <button class="enviar" id="btnSalvarEditada">Identificar questões</button>
       <div class="status" id="statusEditada"></div>
@@ -855,16 +821,6 @@
   const editorQuestao = document.getElementById('editorQuestao');
   const statusEditadaEl = document.getElementById('statusEditada');
   const listaQuestoesIdentificadasManualEl = document.getElementById('listaQuestoesIdentificadasManual');
-  document.querySelectorAll('#editorToolbar [data-command]').forEach((botao) => {
-    botao.addEventListener('click', () => {
-      editorQuestao.focus();
-      document.execCommand(botao.dataset.command, false);
-    });
-  });
-  document.getElementById('editorFormato').addEventListener('change', (evento) => {
-    editorQuestao.focus();
-    document.execCommand('formatBlock', false, evento.target.value);
-  });
   document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
     const texto = editorQuestao.innerText.trim();
     if (!texto) {
