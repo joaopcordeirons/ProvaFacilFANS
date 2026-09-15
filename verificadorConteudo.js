@@ -82,11 +82,14 @@ async function verificarConteudo({ enunciado, alternativas }) {
         generationConfig: {
           temperature: 0,
           maxOutputTokens: 300,
-          // Desliga o "thinking" do modelo: essa checagem é uma
-          // classificação simples, não precisa de raciocínio profundo,
-          // e o thinking estava sendo a causa da demora (às vezes
-          // estourando o timeout de 15s e caindo no "aborted").
-          thinkingConfig: { thinkingBudget: 0 },
+          // Modelos Gemini 3 (ex.: gemini-3.8-flash, resolvido a partir
+          // de "gemini-flash-latest") usam thinkingLevel em vez de
+          // thinkingBudget, e não suportam desligar o thinking por
+          // completo. "low" reduz bastante a demora sem cair tanto na
+          // precisão quanto thinkingBudget:0/nível mínimo (que causou
+          // falsos positivos, ex.: acusar um enunciado completo como
+          // "cortado").
+          thinkingConfig: { thinkingLevel: 'low' },
         },
       }),
       signal: controller.signal,
