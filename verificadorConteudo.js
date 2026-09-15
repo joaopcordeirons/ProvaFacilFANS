@@ -22,7 +22,10 @@
 // numa versão específica, defina GEMINI_MODEL no .env (ex.: gemini-3.7-flash).
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-const TIMEOUT_MS = 20000;
+// 12s por tentativa: com MAX_TENTATIVAS=3 + esperas entre elas, o pior
+// caso fica em ~40s, com folga dentro do maxDuration=60s da função na
+// Vercel (ver vercel.json).
+const TIMEOUT_MS = 12000;
 
 function montarPrompt(enunciado, alternativas) {
   const blocoAlternativas = alternativas && alternativas.length
@@ -48,19 +51,22 @@ function extrairJson(textoResposta) {
   return JSON.parse(limpo);
 }
 
-// Verifica a coerência de uma questão via Gemini. Nunca lança erro pra
-// quem chamou: qualquer falha (sem chave configurada, rede fora do ar,
-// limite de uso estourado, resposta em formato inesperado) devolve
-// { disponivel: false, motivo } em vez de quebrar o fluxo do professor.
-async function verificarConteudo({ enunciado, alternativas }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { disponivel: false, motivo: 'GEMINI_API_KEY não configurada no servidor.' };
-  }
-  if (!enunciado || !enunciado.trim()) {
-    return { disponivel: false, motivo: 'Nada para verificar.' };
-  }
+// Quantas vezes tenta de novo quando o Gemini responde 429 (limite de
+// uso) ou 503 (servidor do Google sobrecarregado — comum em modelos
+// recém-lançados como o gemini-3.8-flash, mesmo com pouco uso próprio).
+// Ambos costumam se resolver em segundos, então vale uma nova tentativa
+// automática antes de desistir e mostrar erro pro professor.
+const MAX_TENTATIVAS = 3;
+const ESPERA_BASE_MS = 1500;
 
+function esperar(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Faz uma única chamada ao Gemini. Lança erro (com .status quando vier
+// da API) em vez de retornar { disponivel: false } — quem decide se
+// tenta de novo ou desiste é o chamador (verificarConteudo).
+async function chamarGemini(apiKey, enunciado, alternativas) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -95,17 +101,25 @@ async function verificarConteudo({ enunciado, alternativas }) {
       signal: controller.signal,
     });
 
-    if (resposta.status === 429) {
-      return { disponivel: false, motivo: 'Limite gratuito de uso da IA atingido no momento. Tente de novo em alguns minutos.' };
+    if (resposta.status === 429 || resposta.status === 503) {
+      const erro = new Error(resposta.status === 429 ? 'Limite de uso atingido' : 'Servidor do Gemini sobrecarregado');
+      erro.status = resposta.status;
+      throw erro;
     }
     if (resposta.status === 401 || resposta.status === 403) {
       const corpoErro = await resposta.text();
       console.warn('[verificadorConteudo] Erro de autenticação na chave Gemini:', resposta.status, corpoErro);
-      return { disponivel: false, motivo: 'Chave de API do Gemini inválida ou não autorizada. Confira o GEMINI_API_KEY configurado no servidor.' };
+      const erro = new Error('Chave de API do Gemini inválida ou não autorizada. Confira o GEMINI_API_KEY configurado no servidor.');
+      erro.status = resposta.status;
+      erro.semRetry = true;
+      throw erro;
     }
     if (resposta.status === 404) {
       console.warn('[verificadorConteudo] Modelo não encontrado:', GEMINI_MODEL);
-      return { disponivel: false, motivo: `Modelo de IA "${GEMINI_MODEL}" não existe ou foi desativado pelo Google. Ajuste GEMINI_MODEL no servidor.` };
+      const erro = new Error(`Modelo de IA "${GEMINI_MODEL}" não existe ou foi desativado pelo Google. Ajuste GEMINI_MODEL no servidor.`);
+      erro.status = resposta.status;
+      erro.semRetry = true;
+      throw erro;
     }
     if (!resposta.ok) {
       throw new Error(`Gemini respondeu status ${resposta.status}`);
@@ -133,15 +147,56 @@ async function verificarConteudo({ enunciado, alternativas }) {
       coerente: Boolean(resultado.coerente),
       observacao: resultado.observacao || '',
     };
-  } catch (err) {
-    console.warn('[verificadorConteudo] Não foi possível verificar com Gemini:', err.message);
-    // TEMPORÁRIO para diagnóstico: manda o motivo detalhado pro front-end,
-    // em vez de só no log do servidor. Reverter para a mensagem genérica
-    // assim que o problema for identificado e corrigido.
-    return { disponivel: false, motivo: `[debug] ${err.message}` };
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+// Verifica a coerência de uma questão via Gemini. Nunca lança erro pra
+// quem chamou: qualquer falha (sem chave configurada, rede fora do ar,
+// limite de uso estourado, resposta em formato inesperado) devolve
+// { disponivel: false, motivo } em vez de quebrar o fluxo do professor.
+// Faz retry automático em 429/503, com espera crescente entre tentativas.
+async function verificarConteudo({ enunciado, alternativas }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { disponivel: false, motivo: 'GEMINI_API_KEY não configurada no servidor.' };
+  }
+  if (!enunciado || !enunciado.trim()) {
+    return { disponivel: false, motivo: 'Nada para verificar.' };
+  }
+
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+    try {
+      return await chamarGemini(apiKey, enunciado, alternativas);
+    } catch (err) {
+      ultimoErro = err;
+      if (err.semRetry || tentativa === MAX_TENTATIVAS) break;
+      if (err.status === 429 || err.status === 503) {
+        console.warn(`[verificadorConteudo] Tentativa ${tentativa} falhou (${err.status}), tentando de novo...`);
+        await esperar(ESPERA_BASE_MS * tentativa);
+        continue;
+      }
+      break; // erro que não vale a pena repetir (parse, timeout, etc.)
+    }
+  }
+
+  if (ultimoErro.status === 429) {
+    return { disponivel: false, motivo: 'Limite gratuito de uso da IA atingido no momento. Tente de novo em alguns minutos.' };
+  }
+  if (ultimoErro.status === 503) {
+    return { disponivel: false, motivo: 'Servidor do Gemini está sobrecarregado no momento. Tente de novo em instantes.' };
+  }
+  if (ultimoErro.status === 401 || ultimoErro.status === 403 || ultimoErro.status === 404) {
+    return { disponivel: false, motivo: ultimoErro.message };
+  }
+
+  console.warn('[verificadorConteudo] Não foi possível verificar com Gemini:', ultimoErro.message);
+  // TEMPORÁRIO para diagnóstico: manda o motivo detalhado pro front-end,
+  // em vez de só no log do servidor. Reverter para a mensagem genérica
+  // assim que o problema for identificado e corrigido.
+  return { disponivel: false, motivo: `[debug] ${ultimoErro.message}` };
 }
 
 module.exports = { verificarConteudo };
