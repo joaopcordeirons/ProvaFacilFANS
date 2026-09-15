@@ -256,6 +256,12 @@
     border: 1px solid var(--border);
     color: var(--muted);
   }
+  .questao-candidata .acoes button.corrigir {
+    background: #fff;
+    border: 1px solid #2563eb;
+    color: #2563eb;
+  }
+  .questao-candidata .acoes button.corrigir:disabled { opacity: 0.55; cursor: not-allowed; }
   .verificacao-conteudo {
     margin-top: 0.5rem;
     font-size: 0.82rem;
@@ -613,6 +619,7 @@
         <div class="acoes">
           <button class="salvar btn-salvar-candidata">Salvar questão</button>
           <button class="verificar btn-verificar-candidata" type="button">Verificar conteúdo com IA</button>
+          <button class="corrigir btn-corrigir-ia-candidata" type="button">Corrigir com IA</button>
           <button class="excluir btn-descartar-candidata">Descartar</button>
         </div>
         <div class="status-inline"></div>
@@ -665,6 +672,53 @@
         } finally {
           botao.disabled = false;
           botao.textContent = 'Verificar conteúdo com IA';
+        }
+      });
+
+      item.querySelector('.btn-corrigir-ia-candidata').addEventListener('click', async (evento) => {
+        const botao = evento.target;
+        const caixaVerificacao = item.querySelector('.verificacao-conteudo');
+        botao.disabled = true;
+        botao.textContent = 'Corrigindo...';
+        caixaVerificacao.classList.remove('oculto');
+        caixaVerificacao.className = 'verificacao-conteudo';
+        caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+        try {
+          // Mesma separação enunciado/alternativas usada no "Verificar
+          // conteúdo com IA" acima — ver comentário lá pro porquê.
+          const linhas = textareaEl.value.split('\n');
+          const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+          const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
+          const resposta = await fetch(API_BASE + '/api/questoes/corrigir-com-ia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+          });
+          const dados = await resposta.json();
+          if (!resposta.ok) throw new Error(dados.erro || 'Falha ao corrigir.');
+          if (!dados.disponivel) {
+            caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+            caixaVerificacao.textContent = dados.motivo || 'Correção indisponível no momento.';
+          } else {
+            // Só atualiza o textarea — o professor decide se clica em
+            // "Salvar questão" depois de revisar o resultado. Nada é
+            // salvo automaticamente.
+            const partes = [dados.enunciado];
+            if (dados.alternativas && dados.alternativas.length) {
+              partes.push('', ...dados.alternativas);
+            }
+            textareaEl.value = partes.join('\n').trim();
+            caixaVerificacao.className = 'verificacao-conteudo ok';
+            caixaVerificacao.textContent = dados.observacao
+              ? `✓ Corrigido: ${dados.observacao} Revise antes de salvar.`
+              : '✓ A IA não encontrou nada pra corrigir aqui.';
+          }
+        } catch (err) {
+          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+          caixaVerificacao.textContent = err.message;
+        } finally {
+          botao.disabled = false;
+          botao.textContent = 'Corrigir com IA';
         }
       });
 

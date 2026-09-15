@@ -11,6 +11,7 @@ const path = require('path');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
+const { corrigirComIA } = require('./corretorIA');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
 const { criarQuestao, listarQuestoes, excluirQuestao } = require('./firebase');
 
@@ -125,6 +126,23 @@ app.post('/api/questoes/verificar-conteudo', express.json({ limit: '1mb' }), asy
   } catch (err) {
     console.error('Erro ao verificar conteúdo:', err.message);
     return res.status(500).json({ erro: 'Falha ao verificar conteúdo.', detalhe: err.message });
+  }
+});
+
+// Correção OPCIONAL de formatação via IA (Gemini, sob demanda — só
+// quando o professor clica em "Corrigir com IA", nunca automático). Ao
+// contrário da verificação acima, esta reescreve o texto — o professor
+// sempre revisa antes de salvar. Ver corretorIA.js.
+app.post('/api/questoes/corrigir-com-ia', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { enunciado, alternativas } = req.body || {};
+    if (typeof enunciado !== 'string' || !enunciado.trim()) {
+      return res.status(400).json({ erro: 'O campo "enunciado" é obrigatório.' });
+    }
+    return res.json(await corrigirComIA({ enunciado, alternativas }));
+  } catch (err) {
+    console.error('Erro ao corrigir com IA:', err.message);
+    return res.status(500).json({ erro: 'Falha ao corrigir com IA.', detalhe: err.message });
   }
 });
 
