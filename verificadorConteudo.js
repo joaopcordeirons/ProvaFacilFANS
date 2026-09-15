@@ -101,9 +101,25 @@ async function chamarGemini(apiKey, enunciado, alternativas) {
       signal: controller.signal,
     });
 
-    if (resposta.status === 429 || resposta.status === 503) {
-      const erro = new Error(resposta.status === 429 ? 'Limite de uso atingido' : 'Servidor do Gemini sobrecarregado');
-      erro.status = resposta.status;
+    if (resposta.status === 429) {
+      // O corpo do erro do Google costuma citar qual cota estourou:
+      // "PerDay" (limite diário — só reseta amanhã, não adianta tentar
+      // de novo agora) vs "PerMinute" (limite por minuto — se resolve
+      // sozinho em segundos). Sem isso, não dá pra saber qual dos dois
+      // aconteceu, e avisar "tente em alguns minutos" pra um limite
+      // diário é enganoso.
+      const corpoErro = await resposta.text();
+      console.warn('[verificadorConteudo] 429 do Gemini:', corpoErro);
+      const ehDiario = /perday|per_day|dia\b/i.test(corpoErro);
+      const erro = new Error('Limite de uso atingido');
+      erro.status = 429;
+      erro.ehDiario = ehDiario;
+      erro.semRetry = ehDiario; // limite diário: tentar de novo agora não ajuda
+      throw erro;
+    }
+    if (resposta.status === 503) {
+      const erro = new Error('Servidor do Gemini sobrecarregado');
+      erro.status = 503;
       throw erro;
     }
     if (resposta.status === 401 || resposta.status === 403) {
@@ -183,7 +199,12 @@ async function verificarConteudo({ enunciado, alternativas }) {
   }
 
   if (ultimoErro.status === 429) {
-    return { disponivel: false, motivo: 'Limite gratuito de uso da IA atingido no momento. Tente de novo em alguns minutos.' };
+    return {
+      disponivel: false,
+      motivo: ultimoErro.ehDiario
+        ? 'Limite gratuito DIÁRIO de uso da IA atingido. Só volta a funcionar amanhã (reset é no fuso do Google, ~21h de Brasília) — o resto do sistema continua normal, só esse botão fica indisponível até lá.'
+        : 'Limite gratuito de uso da IA atingido no momento (por minuto). Tente de novo em instantes.',
+    };
   }
   if (ultimoErro.status === 503) {
     return { disponivel: false, motivo: 'Servidor do Gemini está sobrecarregado no momento. Tente de novo em instantes.' };
