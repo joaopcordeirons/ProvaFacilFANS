@@ -14,23 +14,134 @@
 const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
+const { lerCoberturaTTF } = require('./coberturaFonte');
 const {
   prepararProva, formatarPontos, separarQuestao, COR_INSTITUCIONAL,
 } = require('./modeloProva');
 
-// O pdfkit carrega as métricas das fontes padrão por subpath dinâmico
-// ("#standard-fonts/Helvetica"). Empacotadores que analisam o código
-// estaticamente — como o da Vercel — não enxergam esse require e deixam
-// os arquivos de fora, o que quebra a geração com
-// "Cannot find module .../standard-fonts/Helvetica.cjs" só em produção.
-// Os requires abaixo são apenas uma pista para o empacotador incluir os
-// arquivos; se falharem, o pdfkit ainda tenta resolver sozinho.
-try {
-  require('pdfkit/standard-fonts/Helvetica');
-  require('pdfkit/standard-fonts/HelveticaBold');
-  require('pdfkit/standard-fonts/HelveticaOblique');
-} catch (err) {
-  console.warn('[provaPdf] Fontes padrão do pdfkit não pré-carregadas:', err.message);
+// As fontes padrão do PDF (Helvetica etc.) só desenham o WinAnsiEncoding
+// (~cp1252): letras acentuadas do português entram nessa tabela, mas
+// símbolos como "●", "•", travessão "—" ou aspas curvas não — e o pdfkit
+// não falha nesse caso, ele escreve bytes de outro glyph da tabela no PDF,
+// o que aparece como lixo tipo "%Ï" quando o professor cola uma questão
+// com marcadores de lista. A correção é embutir uma fonte TrueType de
+// verdade (com tabela Unicode própria) em vez de depender do WinAnsi.
+//
+// Liberation Sans é metricamente compatível com a Arial do template (SIL
+// Open Font License, redistribuível) e cobre bullet, travessões, aspas
+// tipográficas e os símbolos matemáticos mais comuns. Mas nenhuma fonte
+// cobre tudo — símbolos mais raros (✓ ✗ ★ ▶, moedas menos comuns) ficam
+// de fora dela. Para esses casos existe uma segunda fonte reserva, a
+// DejaVu Sans, com uma tabela Unicode bem mais ampla (Bitstream Vera
+// License, redistribuível): o texto do professor é varrido caractere a
+// caractere e só troca de fonte no trecho que a fonte principal não sabe
+// desenhar — ver `escreverTexto` mais abaixo.
+const PASTA_FONTES = path.join(__dirname, 'assets', 'fontes');
+
+const FONTE = {
+  normal: 'Corpo',
+  negrito: 'Corpo-Negrito',
+  italico: 'Corpo-Italico',
+};
+const FONTE_RESERVA = {
+  normal: 'Reserva',
+  negrito: 'Reserva-Negrito',
+  italico: 'Reserva-Italico',
+};
+// Cada fonte principal aponta para a reserva do mesmo peso/estilo, para
+// o texto de fallback não destoar (negrito continua negrito, etc.).
+const PAR_RESERVA = {
+  [FONTE.normal]: FONTE_RESERVA.normal,
+  [FONTE.negrito]: FONTE_RESERVA.negrito,
+  [FONTE.italico]: FONTE_RESERVA.italico,
+};
+
+function registrarFontes(doc) {
+  doc.registerFont(FONTE.normal, path.join(PASTA_FONTES, 'LiberationSans-Regular.ttf'));
+  doc.registerFont(FONTE.negrito, path.join(PASTA_FONTES, 'LiberationSans-Bold.ttf'));
+  doc.registerFont(FONTE.italico, path.join(PASTA_FONTES, 'LiberationSans-Italic.ttf'));
+  doc.registerFont(FONTE_RESERVA.normal, path.join(PASTA_FONTES, 'DejaVuSans.ttf'));
+  doc.registerFont(FONTE_RESERVA.negrito, path.join(PASTA_FONTES, 'DejaVuSans-Bold.ttf'));
+  doc.registerFont(FONTE_RESERVA.italico, path.join(PASTA_FONTES, 'DejaVuSans-Oblique.ttf'));
+}
+
+// Cobertura da fonte principal, calculada uma vez só (o arquivo não
+// muda em runtime) e reaproveitada em toda geração de PDF.
+let coberturaPrincipal = null;
+function obterCoberturaPrincipal() {
+  if (coberturaPrincipal === null) {
+    coberturaPrincipal = lerCoberturaTTF(path.join(PASTA_FONTES, 'LiberationSans-Regular.ttf'));
+  }
+  return coberturaPrincipal;
+}
+
+// Quebra o texto em trechos contínuos "cobertos pela fonte principal" /
+// "precisam da reserva". Espaços e quebras de linha nunca sozinhos
+// disparam a troca de fonte — não vale a pena mudar de fonte por causa
+// de um espaço no meio de uma palavra coberta.
+function segmentarPorCobertura(texto, cobertura) {
+  if (!cobertura) return [{ texto, reserva: false }];
+
+  const segmentos = [];
+  let atual = '';
+  let atualReserva = false;
+
+  Array.from(texto).forEach((caractere) => {
+    const precisaReserva = caractere.trim() !== '' && !cobertura.has(caractere.codePointAt(0));
+    if (atual && precisaReserva !== atualReserva) {
+      segmentos.push({ texto: atual, reserva: atualReserva });
+      atual = '';
+    }
+    atual += caractere;
+    atualReserva = precisaReserva;
+  });
+  if (atual) segmentos.push({ texto: atual, reserva: atualReserva });
+  return segmentos;
+}
+
+/**
+ * Substituto de `doc.text(...)` que troca para a fonte reserva só nos
+ * trechos que a fonte principal não sabe desenhar. Aceita as duas formas
+ * de chamada do pdfkit: com posição (`x`, `y`) para começar um parágrafo
+ * novo, ou só com opções (`continued: true` encadeado a um texto anterior
+ * na mesma linha).
+ *
+ * @param {PDFKit.PDFDocument} doc
+ * @param {string} texto
+ * @param {string} fontePrincipal um dos valores de FONTE
+ * @param {number|object} [x] posição x, ou já as opções (chamada continuada)
+ * @param {number} [y]
+ * @param {object} [opcoes]
+ */
+function escreverTexto(doc, texto, fontePrincipal, x, y, opcoes) {
+  let posX = x;
+  let posY = y;
+  let opcoesFinais = opcoes;
+  if (typeof posX === 'object' && posX !== null) {
+    opcoesFinais = posX;
+    posX = undefined;
+    posY = undefined;
+  }
+  opcoesFinais = opcoesFinais || {};
+
+  const segmentos = segmentarPorCobertura(texto, obterCoberturaPrincipal());
+
+  if (segmentos.length === 1 && !segmentos[0].reserva) {
+    doc.font(fontePrincipal);
+    if (posX !== undefined) doc.text(texto, posX, posY, opcoesFinais);
+    else doc.text(texto, opcoesFinais);
+    return;
+  }
+
+  const fonteReserva = PAR_RESERVA[fontePrincipal] || FONTE_RESERVA.normal;
+  segmentos.forEach((segmento, indice) => {
+    const primeiro = indice === 0;
+    const ultimo = indice === segmentos.length - 1;
+    doc.font(segmento.reserva ? fonteReserva : fontePrincipal);
+    const opcoesSegmento = { ...opcoesFinais, continued: !ultimo || opcoesFinais.continued };
+    if (primeiro && posX !== undefined) doc.text(segmento.texto, posX, posY, opcoesSegmento);
+    else doc.text(segmento.texto, opcoesSegmento);
+  });
 }
 
 const pt = (twips) => twips / 20;
@@ -101,7 +212,7 @@ function desenharLinhaCabecalho(doc, y, alturaMinima, celulas) {
       .reduce((soma, valor) => soma + valor, 0);
 
     // Rótulo e valor são os dois em negrito no template; muda só o corpo.
-    const fonte = 'Helvetica-Bold';
+    const fonte = FONTE.negrito;
     const tamanho = celula.tipo === 'rotulo' ? 11 : 10;
     const texto = celula.texto || '';
     const alturaTexto = texto
@@ -116,12 +227,11 @@ function desenharLinhaCabecalho(doc, y, alturaMinima, celulas) {
   preparadas.forEach((celula) => {
     desenharRetangulo(doc, celula.x, y, celula.largura, altura, null);
     if (!celula.texto) return;
-    doc.font(celula.fonte).fontSize(celula.tamanho)
-      .fillColor(celula.tipo === 'rotulo' ? AZUL : PRETO)
-      .text(celula.texto, celula.x + MARGEM_CELULA, y + (altura - celula.alturaTexto) / 2, {
-        width: celula.largura - MARGEM_CELULA * 2,
-        align: celula.tipo === 'rotulo' ? 'center' : (celula.align || 'left'),
-      });
+    doc.fillColor(celula.tipo === 'rotulo' ? AZUL : PRETO).fontSize(celula.tamanho);
+    escreverTexto(doc, celula.texto, celula.fonte, celula.x + MARGEM_CELULA, y + (altura - celula.alturaTexto) / 2, {
+      width: celula.largura - MARGEM_CELULA * 2,
+      align: celula.tipo === 'rotulo' ? 'center' : (celula.align || 'left'),
+    });
   });
 
   return y + altura;
@@ -145,18 +255,18 @@ function desenharCabecalho(doc, prova) {
   } catch (err) {
     // Sem a logo o caderno ainda sai — só com o nome da instituição.
     console.warn('[provaPdf] Logo da FANS não carregada:', err.message);
-    doc.font('Helvetica-Bold').fontSize(20).fillColor(AZUL)
+    doc.font(FONTE.negrito).fontSize(20).fillColor(AZUL)
       .text('FANS', xLogo, y + alturaTitulo / 2 - 12, { width: larguraLogo, align: 'center' });
   }
 
   const xTexto = xLogo + larguraLogo + 14;
   const larguraTexto = TABELA_X + TABELA_LARGURA - xTexto - MARGEM_CELULA;
-  doc.font('Helvetica-Bold').fontSize(22).fillColor(AZUL)
+  doc.font(FONTE.negrito).fontSize(22).fillColor(AZUL)
     .text('CADERNO DE PROVAS', xTexto, y + alturaTitulo / 2 - 32, {
       width: larguraTexto, underline: true,
     });
-  doc.font('Helvetica').fontSize(18).fillColor(AZUL)
-    .text(prova.titulo || 'Avaliação', xTexto, doc.y + 8, { width: larguraTexto });
+  doc.fillColor(AZUL).fontSize(18);
+  escreverTexto(doc, prova.titulo || 'Avaliação', FONTE.normal, xTexto, doc.y + 8, { width: larguraTexto });
 
   y += alturaTitulo;
 
@@ -192,7 +302,7 @@ function desenharFaixa(doc, texto, { manterJunto = 0 } = {}) {
   garantirEspaco(doc, ALTURA_FAIXA + manterJunto);
   const y = doc.y;
   doc.rect(FAIXA_X, y, FAIXA_LARGURA, ALTURA_FAIXA).fillColor(AZUL).fill();
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(BRANCO)
+  doc.font(FONTE.negrito).fontSize(14).fillColor(BRANCO)
     .text(texto, FAIXA_X, y + (ALTURA_FAIXA - 14) / 2 + 1, {
       width: FAIXA_LARGURA, align: 'center', lineBreak: false,
     });
@@ -205,7 +315,7 @@ function desenharOrientacoes(doc, prova) {
   // Faixa azul do título, com borda como no template.
   doc.rect(TABELA_X, yInicio, TABELA_LARGURA, ALTURA_FAIXA).fillColor(AZUL).fill();
   doc.rect(TABELA_X, yInicio, TABELA_LARGURA, ALTURA_FAIXA).lineWidth(0.8).strokeColor(PRETO).stroke();
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(BRANCO)
+  doc.font(FONTE.negrito).fontSize(14).fillColor(BRANCO)
     .text('ORIENTAÇÕES GERAIS PARA ESTA AVALIAÇÃO:', TABELA_X, yInicio + (ALTURA_FAIXA - 14) / 2 + 1, {
       width: TABELA_LARGURA, align: 'center', lineBreak: false,
     });
@@ -213,7 +323,7 @@ function desenharOrientacoes(doc, prova) {
   // Corpo: lista numerada em itálico azul, justificada.
   const yCorpo = yInicio + ALTURA_FAIXA;
   const larguraTexto = TABELA_LARGURA - MARGEM_CELULA * 2 - 18;
-  doc.font('Helvetica-Oblique').fontSize(11);
+  doc.font(FONTE.italico).fontSize(11);
   const alturaCorpo = Math.max(
     pt(1832),
     prova.orientacoes.reduce(
@@ -226,11 +336,11 @@ function desenharOrientacoes(doc, prova) {
 
   let y = yCorpo + MARGEM_CELULA;
   prova.orientacoes.forEach((item, indice) => {
-    doc.font('Helvetica-Oblique').fontSize(11).fillColor(AZUL)
-      .text(`${indice + 1}.`, TABELA_X + MARGEM_CELULA, y, { width: 16 })
-      .text(item, TABELA_X + MARGEM_CELULA + 18, y, {
-        width: larguraTexto, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS,
-      });
+    doc.font(FONTE.italico).fontSize(11).fillColor(AZUL)
+      .text(`${indice + 1}.`, TABELA_X + MARGEM_CELULA, y, { width: 16 });
+    escreverTexto(doc, item, FONTE.italico, TABELA_X + MARGEM_CELULA + 18, y, {
+      width: larguraTexto, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS,
+    });
     y = doc.y;
   });
 
@@ -254,33 +364,35 @@ function desenharQuestao(doc, questao, numero, prova) {
   doc.y += 10;
 
   if (questao.referencia.length) {
-    // "Ano: 2023 Banca: FGV ..." — rótulo em negrito, valor normal, tudo
-    // na mesma linha (continued encadeia os trechos).
-    doc.fillColor(PRETO).font('Helvetica-Bold').fontSize(10)
-      .text(`${questao.referencia[0].rotulo} `, MARGEM_ESQUERDA, doc.y, {
-        width: largura, continued: true,
-      });
+    // "Ano: 2023 Banca: FGV ..." — rótulo fixo em negrito, valor (digitado
+    // pelo professor) passa pela fonte reserva se precisar; continued
+    // encadeia os trechos todos na mesma linha.
+    doc.fillColor(PRETO).fontSize(10);
     questao.referencia.forEach(({ rotulo, valor }, indice) => {
-      if (indice > 0) doc.font('Helvetica-Bold').text(`${rotulo} `, { continued: true });
       const ultimo = indice === questao.referencia.length - 1;
-      doc.font('Helvetica').text(ultimo ? valor : `${valor}  `, { continued: !ultimo });
+      doc.font(FONTE.negrito);
+      if (indice === 0) {
+        doc.text(`${rotulo} `, MARGEM_ESQUERDA, doc.y, { width: largura, continued: true });
+      } else {
+        doc.text(`${rotulo} `, { continued: true });
+      }
+      escreverTexto(doc, ultimo ? valor : `${valor}  `, FONTE.normal, { continued: !ultimo });
     });
     doc.y += 8;
   }
 
-  doc.font('Helvetica').fontSize(10).fillColor(PRETO)
-    .text(questao.enunciado || '(questão sem enunciado)', MARGEM_ESQUERDA, doc.y, {
-      width: largura, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS,
-    });
+  doc.fontSize(10).fillColor(PRETO);
+  escreverTexto(doc, questao.enunciado || '(questão sem enunciado)', FONTE.normal, MARGEM_ESQUERDA, doc.y, {
+    width: largura, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS,
+  });
 
   if (questao.alternativas.length) {
     doc.y += 8;
     questao.alternativas.forEach((alternativa) => {
       garantirEspaco(doc, 14);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(PRETO)
+      doc.font(FONTE.negrito).fontSize(10).fillColor(PRETO)
         .text(`${alternativa.letra}) `, MARGEM_ESQUERDA, doc.y, { continued: true });
-      doc.font('Helvetica').fontSize(10)
-        .text(alternativa.texto, { width: largura, lineGap: ESPACO_ENTRE_LINHAS });
+      escreverTexto(doc, alternativa.texto, FONTE.normal, { width: largura, lineGap: ESPACO_ENTRE_LINHAS });
     });
   } else if (prova.linhasResposta > 0) {
     // Dissertativa: espaço pautado para o aluno responder.
@@ -311,7 +423,7 @@ function desenharRodapes(doc) {
     const altura = 38;
     const yFaixa = doc.page.height - MARGEM_INFERIOR + 14;
     doc.rect(FAIXA_X, yFaixa, FAIXA_LARGURA, altura).fillColor(AZUL).fill();
-    doc.font('Helvetica-Bold').fontSize(14).fillColor(BRANCO)
+    doc.font(FONTE.negrito).fontSize(14).fillColor(BRANCO)
       .text('FACULDADE DE NOVA SERRANA', FAIXA_X, yFaixa + 5, {
         width: FAIXA_LARGURA, align: 'center', lineBreak: false,
       })
@@ -368,6 +480,8 @@ function montarPdfProva(prova) {
       doc.on('data', (pedaco) => pedacos.push(pedaco));
       doc.on('end', () => resolve(Buffer.concat(pedacos)));
       doc.on('error', reject);
+
+      registrarFontes(doc);
 
       desenharCabecalho(doc, dados);
       desenharOrientacoes(doc, dados);

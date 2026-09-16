@@ -16,6 +16,8 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 - **Montagem da prova** em 3 passos: seleção das questões (com soma automática dos valores em relação aos 10,0 pontos), revisão/reordenação e preenchimento do cabeçalho.
 - **Geração da prova no template oficial da FANS** (em ABNT) em `POST /api/provas/gerar-pdf` e `POST /api/provas/gerar-docx`: quadro de identificação com a logo (CURSO, DATA, ETAPA, PERÍODO, APROVAÇÃO DO COORDENADOR, ALUNO, VALOR), quadro de ORIENTAÇÕES GERAIS, faixas azuis `QUESTÃO N – (04 pontos)`, linha de referência `Ano/Banca/Órgão/Prova`, corpo em Arial 10 justificado, linhas pautadas para dissertativas e rodapé institucional em todas as páginas.
 - O DOCX é gerado a partir de `assets/Template-Avaliacao-FANS.docx`: o gerador troca apenas o `word/document.xml` do template, então estilos, numeração, fontes, margens, rodapé e logo continuam sendo os do arquivo aprovado pela coordenação.
+- O PDF embute a fonte Liberation Sans (`assets/fontes/`, SIL OFL) em vez da Helvetica padrão do PDF. A Helvetica de fábrica só desenha o WinAnsiEncoding (~cp1252) — letras acentuadas do português entram nessa tabela, mas símbolos como marcador de lista (`●`), travessão (`—`) ou aspas tipográficas não, e apareciam como caracteres corrompidos no PDF gerado. Com a fonte embutida esses símbolos saem corretos.
+- Para símbolos mais raros que nem a Liberation Sans cobre (`✓ ✗ ★ ▶`, por exemplo), `provaPdf.js` verifica caractere por caractere (`coberturaFonte.js` lê a tabela `cmap` da fonte TrueType diretamente, sem depender de biblioteca nova) e troca só o trecho necessário para a DejaVu Sans, uma fonte reserva com cobertura Unicode bem mais ampla. O resto do texto continua na Liberation Sans.
 
 ## Como montar uma prova
 

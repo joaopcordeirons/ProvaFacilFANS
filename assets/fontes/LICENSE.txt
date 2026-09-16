@@ -1,0 +1,38 @@
+Fontes em assets/fontes/
+=========================
+
+LiberationSans-Regular.ttf, LiberationSans-Bold.ttf e
+LiberationSans-Italic.ttf são do projeto Liberation Fonts (mantido
+originalmente pela Red Hat), distribuídas sob a SIL Open Font License
+1.1 — licença livre que permite uso, embutimento em documentos e
+redistribuição, inclusive comercial.
+
+DejaVuSans.ttf, DejaVuSans-Bold.ttf e DejaVuSans-Oblique.ttf são do
+projeto DejaVu Fonts (baseado na Bitstream Vera), distribuídas sob a
+licença Bitstream Vera / DejaVu — também livre para uso, embutimento e
+redistribuição.
+
+Por que essas fontes estão aqui:
+---------------------------------
+O gerador de PDF (provaPdf.js) embute a Liberation Sans no lugar da
+Helvetica padrão do PDF. A Helvetica "de fábrica" só sabe desenhar o
+WinAnsiEncoding (~Windows-1252): letras acentuadas do português entram
+nessa tabela, mas símbolos como marcador de lista (●), travessão (—)
+ou aspas tipográficas (" ") não. Sem uma fonte própria embutida, esses
+caracteres saíam como lixo no PDF gerado. A Liberation Sans tem tabela
+Unicode própria, cobre esses símbolos e é metricamente compatível com
+a Arial usada no template oficial da FANS — ou seja, o PDF sai com a
+mesma "cara" de antes.
+
+Nenhuma fonte cobre todo o Unicode, então símbolos mais raros que um
+professor cole na questão (✓ ✗ ★ ▶, por exemplo) ainda ficariam de
+fora da Liberation Sans. Para esses casos, provaPdf.js verifica
+caractere por caractere (coberturaFonte.js lê a tabela cmap da fonte
+diretamente) e troca só o trecho necessário para a DejaVu Sans, que
+tem uma cobertura Unicode bem mais ampla — o resto do texto continua
+na Liberation Sans, sem trocar de aparência à toa.
+
+Textos completos das licenças:
+- SIL OFL: https://scripts.sil.org/OFL
+- Bitstream Vera / DejaVu: https://dejavu-fonts.github.io/License.html
+
