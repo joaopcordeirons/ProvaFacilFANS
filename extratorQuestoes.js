@@ -28,6 +28,19 @@ const PADROES_RUIDO = [
   /^\s*instru[cç][õo]es?\b/i,
   /^\s*boa\s+prova\b/i,
   /^\s*(leia|observe)\s+atentamente\s+antes\s+de\s+come[cç]ar/i,
+  // Cabeçalho de instituição de ensino (papel timbrado), como em
+  // "Faculdade de Nova Serrana" / "Universidade Federal de X" / "Instituto
+  // Federal de Y" — diferente do padrão acima (que exige "Escola: ___"),
+  // esse é um título solto, sem dois-pontos.
+  /^\s*(faculdade|universidade|institui[cç][ãa]o|centro\s+universit[áa]rio|instituto\s+federal)\b/i,
+  // "Graduação em Engenharia de Software" / "Curso de Direito" (título de
+  // curso solto no cabeçalho, sem dois-pontos).
+  /^\s*(gradua[cç][ãa]o|p[óo]s-gradua[cç][ãa]o|curso)\s+(em|de|do|da)\b/i,
+  // "6º Período" / "3º Semestre" / "2º Ano" soltos (sem "Período: ___").
+  /^\s*\d+\s*[ºo°]\s*(per[íi]odo|semestre|ano|bimestre|trimestre)\b/i,
+  // "Prof. Fulano de Tal" / "Profa. Fulana" — assinatura do professor no
+  // cabeçalho, sem dois-pontos (diferente de "Professor: Fulano").
+  /^\s*prof(essor)?a?\.?\s+[a-zà-ú]/i,
 ];
 
 // Marca o início de uma nova questão: "1.", "01)", "Questão 3 -",

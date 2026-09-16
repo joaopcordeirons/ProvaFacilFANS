@@ -19,6 +19,18 @@ const TEMPO_MAXIMO_PREPARO_MS = 15_000;
 const LARGURA_MINIMA_OCR = 1600;
 const LARGURA_MAXIMA_OCR = 3500;
 
+// Largura-alvo (em px) ao rasterizar uma página de PDF pra rodar OCR nela.
+// Alta o suficiente pra texto de código/enunciado ficar legível pro
+// Tesseract, sem exagerar no tamanho do PNG gerado.
+const LARGURA_ALVO_RENDER_PAGINA_PDF = 1900;
+
+// Limite de páginas com imagem em que rodamos OCR num único PDF. Cada
+// página custa alguns segundos de OCR; sem esse teto, um PDF muito grande
+// e cheio de imagens poderia estourar o tempo máximo da função na Vercel
+// (60s, ver vercel.json). Isso cobre folgadamente o caso de uso real
+// (listas de exercícios de poucas páginas).
+const MAX_PAGINAS_OCR_POR_PDF = 15;
+
 // Ao rodar em ambientes serverless (Vercel), se os arquivos de idioma não
 // foram empacotados corretamente pelo build, o OCR fica pendurado sem nunca
 // resolver nem rejeitar. Verificamos aqui no boot e deixamos um log bem
@@ -50,6 +62,51 @@ try {
   }
 } catch (err) {
   console.error('[ocr] ATENÇÃO: não foi possível checar node_modules/tesseract.js-core:', err.message);
+}
+
+// ---------------------------------------------------------------------
+// OCR de imagens EMBUTIDAS em PDF (ex.: enunciado colado como print/foto
+// dentro do arquivo, código-fonte em screenshot, etc.).
+//
+// O pdf-parse (e a extração de texto "nativo" de um PDF em geral) só lê o
+// texto que existe de verdade na camada de texto do arquivo. Se o professor
+// colou uma imagem (print de código, foto de um exercício escrito à mão
+// etc.) dentro do PDF, esse conteúdo é só pixels pro pdf-parse — ele nunca
+// aparecia no texto extraído, mesmo o app já tendo OCR pronto pra imagens
+// soltas (extrairTextoImagem). Esta seção resolve isso: para cada página do
+// PDF, verificamos se ela contém alguma imagem; se contiver, rasterizamos
+// a página inteira (pdfjs-dist + @napi-rs/canvas, ambos sem dependências
+// nativas problemáticas em serverless — mesma lógica de "binário
+// pré-compilado" que já usamos com o sharp) e rodamos o mesmo pipeline de
+// OCR (prepararImagemParaOcr + Tesseract) usado nas imagens soltas.
+//
+// Isso é tratado como um "extra" best-effort: se pdfjs-dist/@napi-rs/canvas
+// não carregarem por qualquer motivo (ex.: binário nativo ausente no
+// ambiente), ou se o OCR de alguma página falhar, caímos de volta pro
+// comportamento antigo (só texto nativo do pdf-parse) em vez de quebrar o
+// endpoint inteiro.
+let _pdfjsLibPromise = null;
+async function carregarPdfjsLib() {
+  if (!_pdfjsLibPromise) {
+    _pdfjsLibPromise = import('pdfjs-dist/legacy/build/pdf.mjs').catch((err) => {
+      console.error('[pdf-ocr] não foi possível carregar pdfjs-dist (OCR de imagens dentro de PDF fica desativado):', err.message);
+      return null;
+    });
+  }
+  return _pdfjsLibPromise;
+}
+
+let _canvasLib; // undefined = ainda não tentou carregar; null = tentou e falhou
+function carregarCanvasLib() {
+  if (_canvasLib === undefined) {
+    try {
+      _canvasLib = require('@napi-rs/canvas');
+    } catch (err) {
+      console.error('[pdf-ocr] não foi possível carregar @napi-rs/canvas (OCR de imagens dentro de PDF fica desativado):', err.message);
+      _canvasLib = null;
+    }
+  }
+  return _canvasLib;
 }
 
 // Helper genérico: corre uma Promise contra um limite de tempo, com uma
@@ -160,7 +217,156 @@ async function prepararImagemParaOcr(buffer) {
   }
 }
 
+// Remove acentos, caixa e pontuação de uma linha só pra fins de comparação
+// (não altera o texto que de fato vai pro resultado final).
+function normalizarLinhaParaComparacao(linha) {
+  return linha
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Junta o texto nativo de uma página (extração normal, alta qualidade) com
+// o texto que o OCR leu na mesma página rasterizada. Como o OCR "vê" a
+// página inteira, ele frequentemente reconhece de novo um texto que já
+// tínhamos capturado nativamente (ex.: o cabeçalho da prova, que é texto de
+// verdade e só está na mesma página que uma imagem colada mais abaixo).
+// Para não duplicar esse conteúdo, descartamos do OCR qualquer linha que já
+// bate (ignorando acento/caixa/pontuação) com uma linha do texto nativo, e
+// só acrescentamos o que é realmente novo (tipicamente, o texto que estava
+// dentro da imagem).
+function mesclarTextoNativoComOcrDaPagina(textoNativo, textoOcr) {
+  const linhasNativas = new Set(
+    textoNativo.split('\n').map(normalizarLinhaParaComparacao).filter(Boolean)
+  );
+  const linhasNovasDoOcr = textoOcr
+    .split('\n')
+    .filter((linha) => {
+      const normalizada = normalizarLinhaParaComparacao(linha);
+      return normalizada && !linhasNativas.has(normalizada);
+    });
+  if (!linhasNovasDoOcr.length) return textoNativo;
+  return [textoNativo.trim(), linhasNovasDoOcr.join('\n')].filter(Boolean).join('\n');
+}
+
+// Reproduz o mesmo algoritmo do pdf-parse (v1.x) para montar o texto nativo
+// de uma página a partir do getTextContent() do pdfjs: concatena os itens
+// da mesma linha (mesma coordenada Y) e quebra linha quando o Y muda. Isso
+// mantém a extração de texto "normal" idêntica à que já existia antes desta
+// mudança — só estamos reaproveitando o pdfjs (já carregado para a parte de
+// OCR) em vez do pdf-parse para gerar esse texto.
+function extrairTextoNativoDaPagina(textContent) {
+  let ultimoY;
+  let texto = '';
+  for (const item of textContent.items) {
+    if (ultimoY === item.transform[5] || ultimoY === undefined) {
+      texto += item.str;
+    } else {
+      texto += '\n' + item.str;
+    }
+    ultimoY = item.transform[5];
+  }
+  return texto;
+}
+
+async function paginaContemImagem(page, OPS) {
+  const operacoesDeImagem = new Set([
+    OPS.paintImageXObject,
+    OPS.paintInlineImageXObject,
+    OPS.paintImageMaskXObject,
+    OPS.paintJpegXObject,
+  ]);
+  const listaDeOperacoes = await page.getOperatorList();
+  return listaDeOperacoes.fnArray.some((fn) => operacoesDeImagem.has(fn));
+}
+
+async function renderizarPaginaComoPng(page, createCanvas) {
+  const viewportBase = page.getViewport({ scale: 1 });
+  const escala = Math.min(Math.max(LARGURA_ALVO_RENDER_PAGINA_PDF / viewportBase.width, 1.2), 4);
+  const viewport = page.getViewport({ scale: escala });
+  const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const contexto = canvas.getContext('2d');
+  await page.render({ canvasContext: contexto, viewport, canvas }).promise;
+  return canvas.toBuffer('image/png');
+}
+
+// Extração "avançada": usa pdfjs-dist diretamente (em vez do pdf-parse) pra
+// poder, página por página, checar se há imagem embutida e rodar OCR nela
+// quando houver. Retorna null quando pdfjs-dist/@napi-rs/canvas não estão
+// disponíveis no ambiente — nesse caso extrairTextoPdf cai pro fallback
+// simples (pdf-parse, texto nativo apenas), em vez de falhar.
+async function extrairTextoPdfComOcrDeImagens(buffer) {
+  const pdfjsLib = await carregarPdfjsLib();
+  const canvasLib = carregarCanvasLib();
+  if (!pdfjsLib || !canvasLib) return null;
+
+  const { getDocument, OPS } = pdfjsLib;
+  const { createCanvas } = canvasLib;
+
+  const documento = await getDocument({
+    data: new Uint8Array(buffer),
+    disableFontFace: true,
+    isEvalSupported: false,
+    standardFontDataUrl: path.join(
+      path.dirname(require.resolve('pdfjs-dist/package.json')),
+      'standard_fonts/'
+    ),
+  }).promise;
+
+  const totalPaginas = documento.numPages;
+  const textoPorPagina = new Array(totalPaginas).fill('');
+  const paginasComImagem = [];
+
+  for (let i = 1; i <= totalPaginas; i++) {
+    const page = await documento.getPage(i);
+    textoPorPagina[i - 1] = extrairTextoNativoDaPagina(await page.getTextContent());
+    if (await paginaContemImagem(page, OPS)) {
+      paginasComImagem.push(i);
+    }
+  }
+
+  if (paginasComImagem.length > 0) {
+    const paginasParaProcessar = paginasComImagem.slice(0, MAX_PAGINAS_OCR_POR_PDF);
+    console.log(`[pdf-ocr] ${paginasParaProcessar.length} de ${totalPaginas} página(s) contêm imagem; rodando OCR nelas...`);
+
+    await comLimiteDeTempo(
+      comWorkerOcrTemporario(async (worker) => {
+        for (const numeroPagina of paginasParaProcessar) {
+          try {
+            const page = await documento.getPage(numeroPagina);
+            const pngDaPagina = await renderizarPaginaComoPng(page, createCanvas);
+            const pngPreparado = await prepararImagemParaOcr(pngDaPagina);
+            const resultado = await worker.recognize(pngPreparado);
+            console.log(`[pdf-ocr] página ${numeroPagina}: confiança ${Math.round(resultado.data.confidence)}%`);
+            textoPorPagina[numeroPagina - 1] = mesclarTextoNativoComOcrDaPagina(
+              textoPorPagina[numeroPagina - 1],
+              resultado.data.text.trim()
+            );
+          } catch (err) {
+            // Falha em UMA página (imagem corrompida, timeout pontual etc.)
+            // não deve derrubar as outras páginas nem o texto nativo já
+            // extraído — só loga e segue com o que já tem.
+            console.error(`[pdf-ocr] falha ao rodar OCR na página ${numeroPagina} (mantendo só o texto nativo dela):`, err.message);
+          }
+        }
+      }),
+      TEMPO_MAXIMO_OCR_MS * Math.max(paginasParaProcessar.length, 1),
+      'O OCR das imagens dentro do PDF excedeu o tempo limite.'
+    );
+  }
+
+  return { texto: textoPorPagina.join('\n\n').trim(), paginas: totalPaginas };
+}
+
 async function extrairTextoPdf(buffer) {
+  try {
+    const resultado = await extrairTextoPdfComOcrDeImagens(buffer);
+    if (resultado) return resultado;
+  } catch (err) {
+    console.error('[pdf] extração avançada (pdfjs + OCR de imagens embutidas) falhou; usando fallback simples só com texto nativo:', err.message);
+  }
   const resultado = await pdfParse(buffer);
   return { texto: resultado.text.trim(), paginas: resultado.numpages };
 }
