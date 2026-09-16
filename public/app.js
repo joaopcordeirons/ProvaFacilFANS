@@ -96,7 +96,7 @@ async function pedirJson(caminho, opcoes) {
 
 /* ---------------------------------------------------------------- navegação */
 
-const VIEWS = { banco: 'viewBanco', montar: 'viewMontar', revisao: 'viewRevisao' };
+const VIEWS = { painel: 'viewPainel', banco: 'viewBanco', montar: 'viewMontar', revisao: 'viewRevisao' };
 
 function mostrarView(nome) {
   Object.entries(VIEWS).forEach(([chave, id]) => {
@@ -108,6 +108,7 @@ function mostrarView(nome) {
   });
   window.scrollTo({ top: 0 });
 
+  if (nome === 'painel') window.Painel?.renderizar();
   if (nome === 'montar') window.MontagemProva?.renderizarMontagem();
   if (nome === 'revisao') window.MontagemProva?.renderizarRevisao();
 }
@@ -433,6 +434,8 @@ async function carregarQuestoes() {
     if (Estado.selecionadas.length !== antes) salvarSelecao();
 
     renderizarBanco();
+    // Os indicadores do painel contam questões do banco.
+    window.Painel?.renderizar({ recarregar: false });
   } catch (err) {
     listaQuestoesEl.innerHTML = '';
     resumoListaEl.innerHTML = `<span class="erro">${escapeHtml(err.message)}</span>`;

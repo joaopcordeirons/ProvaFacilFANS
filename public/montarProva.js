@@ -247,8 +247,10 @@
         : `DOCX gerado com ${ids.length} ${plural}. Abra no Word para editar antes de imprimir.`;
       statusPdfEl.className = 'status ok';
 
-      // O contador "usada em N provas" mudou no servidor.
+      // O contador "usada em N provas" e a lista do painel mudaram no
+      // servidor (a prova gerada fica registrada em /api/provas).
       window.App.carregarQuestoes();
+      window.Painel?.renderizar();
     } catch (err) {
       statusPdfEl.textContent = err.message;
       statusPdfEl.className = 'status erro';

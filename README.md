@@ -4,6 +4,7 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 
 ## Funcionalidades
 
+- **Painel do professor** (tela inicial): provas criadas no semestre, provas aprovadas pela direção, total de questões na banca e questões do assunto predominante, além da tabela de provas recentes com status editável (rascunho / em revisão / aprovada) e atalho para reabrir a prova no passo de revisão.
 - Extração de texto de PDF, DOCX e imagens por OCR.
 - Salvamento manual da questão revisada em `POST /api/questoes`.
 - Editor visual para escrever questões com negrito, itálico, sublinhado, títulos, citações, listas e alinhamento.
@@ -62,5 +63,7 @@ Abra `http://localhost:3001`. Depois de extrair e revisar uma questão, use **Sa
 - `PUT /api/questoes/:id` — edita texto, assunto, período, ano e valor
 - `DELETE /api/questoes/:id`
 - `POST /api/provas/gerar-pdf` — corpo JSON: `{ "questaoIds": ["..."], "titulo": "Avaliação de Banco de Dados", "curso": "...", "periodo": "...", "etapa": "...", "data": "16/09/2026", "valorProva": "10,0", "professor": "...", "instrucoes": "uma orientação por linha", "linhasResposta": 5 }` — responde com o arquivo PDF
+- `GET /api/provas?limite=20` — provas já geradas, para o painel
+- `PATCH /api/provas/:id` — corpo JSON: `{ "status": "aprovada" }` (`rascunho`, `em_revisao` ou `aprovada`)
 - `POST /api/provas/gerar-docx` — mesmo corpo JSON do endpoint acima — responde com o arquivo `.docx` no mesmo modelo
 - `POST /api/questoes/verificar-email`

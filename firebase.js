@@ -207,6 +207,92 @@ async function registrarUsoQuestoes(ids) {
   }
 }
 
+/* ------------------------------------------------------------ provas */
+
+// Cada prova gerada (PDF ou DOCX) vira um documento em "provas". É o que
+// alimenta o Painel do professor: provas do semestre, quantas já foram
+// aprovadas pela direção e a lista das mais recentes.
+const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada'];
+
+async function registrarProva(dados) {
+  const banco = exigirFirestore();
+  const agora = admin.firestore.FieldValue.serverTimestamp();
+  const questaoIds = [...new Set(dados.questaoIds || [])];
+
+  const prova = {
+    titulo: String(dados.titulo || 'Avaliação').slice(0, 160),
+    curso: String(dados.curso || '').slice(0, 80),
+    periodo: String(dados.periodo || '').slice(0, 40),
+    etapa: String(dados.etapa || '').slice(0, 20),
+    data: String(dados.data || '').slice(0, 20),
+    questaoIds,
+    quantidadeQuestoes: questaoIds.length,
+    pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
+    status: 'rascunho',
+    formatos: dados.formato ? [dados.formato] : [],
+    criadoEm: agora,
+    atualizadoEm: agora,
+  };
+
+  // Gerar de novo a mesma prova (ex.: PDF depois do DOCX) atualiza o
+  // registro em vez de duplicar a linha no painel.
+  const semelhante = await banco.collection('provas')
+    .where('titulo', '==', prova.titulo)
+    .orderBy('criadoEm', 'desc')
+    .limit(1)
+    .get()
+    .catch(() => null);
+
+  const anterior = semelhante && !semelhante.empty ? semelhante.docs[0] : null;
+  const mesmasQuestoes = anterior
+    && JSON.stringify(anterior.data().questaoIds || []) === JSON.stringify(questaoIds);
+
+  if (mesmasQuestoes) {
+    const formatos = [...new Set([...(anterior.data().formatos || []), ...prova.formatos])];
+    await anterior.ref.update({ ...prova, formatos, status: anterior.data().status || 'rascunho', criadoEm: anterior.data().criadoEm });
+    return { id: anterior.id };
+  }
+
+  const referencia = await banco.collection('provas').add(prova);
+  return { id: referencia.id };
+}
+
+async function listarProvas(limite = 20) {
+  const banco = exigirFirestore();
+  const snapshot = await banco.collection('provas')
+    .orderBy('atualizadoEm', 'desc')
+    .limit(limite)
+    .get();
+
+  return snapshot.docs.map((doc) => {
+    const dados = doc.data();
+    return {
+      id: doc.id,
+      ...dados,
+      status: STATUS_PROVA.includes(dados.status) ? dados.status : 'rascunho',
+      criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
+      atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
+    };
+  });
+}
+
+// O fluxo de aprovação acontece fora do sistema (a direção assina o
+// caderno); aqui o professor só marca em que pé está.
+async function atualizarStatusProva(id, status) {
+  validarId(id);
+  if (!STATUS_PROVA.includes(status)) {
+    throw Object.assign(new Error('Status de prova inválido.'), { statusCode: 400 });
+  }
+  const banco = exigirFirestore();
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+  await referencia.update({ status, atualizadoEm: admin.firestore.FieldValue.serverTimestamp() });
+  return { id, status };
+}
+
 async function excluirQuestao(id) {
   validarId(id);
   const banco = exigirFirestore();
@@ -222,5 +308,8 @@ module.exports = {
   excluirQuestao,
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
+  registrarProva,
+  listarProvas,
+  atualizarStatusProva,
   sanitizarHtml,
 };

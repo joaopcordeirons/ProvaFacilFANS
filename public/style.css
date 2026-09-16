@@ -661,3 +661,72 @@
     .resumo-prova { position: static; }
     .classificacao { grid-template-columns: 1fr 1fr; }
   }
+
+  /* ---------- Tela 02: Painel do professor ---------- */
+  .indicadores {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem; margin-bottom: 2rem;
+  }
+  .indicador {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 1.1rem 1.15rem;
+  }
+  .indicador-numero {
+    font-family: var(--serif); font-size: 2rem; line-height: 1; font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .indicador-rotulo {
+    margin-top: 0.55rem; font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted);
+  }
+
+  .painel-secao {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 1rem; margin-bottom: 0.9rem;
+  }
+  .painel-secao .secao-titulo { margin-bottom: 0; }
+
+  table.tabela-provas { width: 100%; border-collapse: collapse; }
+  table.tabela-provas th {
+    text-align: left; padding: 0 0.7rem 0.6rem; border-bottom: 1px solid var(--rule-strong);
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-faint); font-weight: 400;
+  }
+  table.tabela-provas td {
+    padding: 0.85rem 0.7rem; border-bottom: 1px solid var(--rule);
+    font-size: 0.87rem; vertical-align: middle;
+  }
+  table.tabela-provas tr:hover td { background: var(--surface); }
+  table.tabela-provas .prova-titulo { font-weight: 600; }
+  table.tabela-provas .numerica { font-variant-numeric: tabular-nums; }
+  table.tabela-provas .discreta { color: var(--ink-muted); }
+  table.tabela-provas .acao { text-align: right; }
+  table.tabela-provas .acao button {
+    border: none; background: transparent; color: var(--ink-muted); cursor: pointer;
+    font-family: var(--sans); font-size: 0.85rem; padding: 0.2rem 0.3rem;
+  }
+  table.tabela-provas .acao button:hover { color: var(--accent); }
+
+  /* O status é editável: a aprovação acontece fora do sistema e o
+     professor registra aqui em que pé a prova está. */
+  .status-prova {
+    appearance: none; border-radius: 999px; padding: 0.25rem 1.5rem 0.25rem 0.75rem;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
+    text-transform: uppercase; cursor: pointer; background: var(--surface);
+    border: 1px solid var(--rule-strong); color: var(--ink-muted);
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: right 0.7rem center, right 0.45rem center;
+    background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
+  }
+  .status-prova.aprovada { border-color: var(--moss); background-color: var(--moss-soft); color: var(--moss); }
+  .status-prova.revisao { border-color: var(--amber); background-color: var(--amber-soft); color: var(--amber); }
+  .status-prova.rascunho { border-style: dashed; }
+
+  @media (max-width: 900px) {
+    .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .indicadores { grid-template-columns: 1fr; }
+    table.tabela-provas { display: block; overflow-x: auto; white-space: nowrap; }
+  }

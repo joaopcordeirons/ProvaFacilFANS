@@ -17,11 +17,11 @@
         <span class="logo-nome">ProvaFácil</span>
       </div>
       <nav class="sidebar-nav">
-        <button type="button" class="nav-item" data-ir-para="banco">
+        <button type="button" class="nav-item ativo" data-ir-para="painel">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 7.2 8 2l6 5.2V14H2z"/></svg>
           Início
         </button>
-        <button type="button" class="nav-item ativo" data-ir-para="banco">
+        <button type="button" class="nav-item" data-ir-para="banco">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5V11A1.5 1.5 0 0 1 13 12.5H3A1.5 1.5 0 0 1 1.5 11z"/></svg>
           Banco de Questões
         </button>
@@ -43,8 +43,30 @@
       </div>
     </aside>
 
+    <!-- ===================== TELA 02 · PAINEL DO PROFESSOR ===================== -->
+    <main class="main main-larga" id="viewPainel">
+      <header class="main-header">
+        <h1>Painel do professor</h1>
+        <div class="header-acoes">
+          <label class="campo-busca">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+            <input type="search" id="buscaPainel" placeholder="Buscar provas ou questões">
+          </label>
+          <div class="avatar" title="Carlos Eduardo">CE</div>
+        </div>
+      </header>
+
+      <div class="indicadores" id="indicadoresPainel"></div>
+
+      <div class="painel-secao">
+        <div class="secao-titulo">Provas recentes <span class="contador" id="contadorProvas"></span></div>
+        <button type="button" class="btn-escuro" id="btnCriarProva">+ Criar nova prova</button>
+      </div>
+      <div id="tabelaProvas"></div>
+    </main>
+
     <!-- ===================== TELA 03 · BANCO DE QUESTÕES ===================== -->
-    <main class="main main-larga" id="viewBanco">
+    <main class="main main-larga oculto" id="viewBanco">
       <header class="main-header">
         <h1>Banco de Questões</h1>
         <div class="header-acoes">
@@ -252,6 +274,7 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
   <datalist id="assuntosConhecidos"></datalist>
 
   <script src="app.js"></script>
+  <script src="painel.js"></script>
   <script src="montarProva.js"></script>
 </body>
 </html>

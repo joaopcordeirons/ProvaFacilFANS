@@ -20,6 +20,9 @@ const {
   excluirQuestao,
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
+  registrarProva,
+  listarProvas,
+  atualizarStatusProva,
 } = require('./firebase');
 const { montarPdfProva } = require('./provaPdf');
 const { montarDocxProva } = require('./provaDocx');
@@ -246,6 +249,23 @@ async function gerarProva(req, res, formato) {
 
     await registrarUsoQuestoes(questoes.map((questao) => questao.id));
 
+    // O registro alimenta o Painel do professor. Falhar aqui não invalida
+    // um arquivo que já foi gerado — o download continua.
+    try {
+      await registrarProva({
+        titulo: dados.titulo,
+        curso: dados.curso,
+        periodo: dados.periodo,
+        etapa: dados.etapa,
+        data: dados.data,
+        formato,
+        questaoIds: questoes.map((questao) => questao.id),
+        pontuacaoTotal: questoes.reduce((soma, questao) => soma + Number(questao.valor || 0), 0),
+      });
+    } catch (err) {
+      console.warn('Não foi possível registrar a prova no painel:', err.message);
+    }
+
     res.setHeader('Content-Type', MIME_SAIDA[formato]);
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo(corpo.titulo, formato)}"`);
     res.setHeader('Content-Length', arquivo.length);
@@ -260,6 +280,31 @@ async function gerarProva(req, res, formato) {
 
 app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'pdf'));
 app.post('/api/provas/gerar-docx', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'docx'));
+
+// Provas já geradas, para o Painel do professor.
+app.get('/api/provas', async (req, res) => {
+  try {
+    const limiteInformado = Number.parseInt(req.query.limite, 10);
+    const limite = Number.isFinite(limiteInformado)
+      ? Math.min(Math.max(limiteInformado, 1), 50)
+      : 20;
+    return res.json({ provas: await listarProvas(limite) });
+  } catch (err) {
+    console.error('Erro ao listar provas:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// O professor marca em que pé está a prova (rascunho, em revisão,
+// aprovada pela direção).
+app.patch('/api/provas/:id', express.json(), async (req, res) => {
+  try {
+    return res.json(await atualizarStatusProva(req.params.id, (req.body || {}).status));
+  } catch (err) {
+    console.error('Erro ao atualizar a prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
 
 app.delete('/api/questoes/:id', async (req, res) => {
   try {
