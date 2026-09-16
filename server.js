@@ -24,6 +24,21 @@ app.use(express.static(path.join(__dirname, 'public')));
 const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const MIMES_IMAGEM = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
 
+// Corrige o mojibake clássico do multer/busboy: o nome do arquivo chega
+// em UTF-8, mas o multipart/form-data às vezes decodifica o cabeçalho
+// como Latin-1 primeiro — "Exercícios" vira "ExercÃ­cios". Reconverter
+// os bytes resolve, sem afetar nomes que já vieram certos (nesse caso o
+// round-trip não muda nada).
+function corrigirNomeArquivo(nome) {
+  if (!nome) return nome;
+  try {
+    return Buffer.from(nome, 'latin1').toString('utf8');
+  } catch (_) {
+    return nome;
+  }
+}
+
+
 // Armazena o upload em memória (não grava em disco) — bom para arquivos
 // pequenos como uma questão de prova em PDF/DOCX.
 const upload = multer({
@@ -167,7 +182,7 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
     const { texto, paginas } = await extrairTextoPdf(req.file.buffer);
 
     return res.json({
-      nomeArquivo: req.file.originalname,
+      nomeArquivo: corrigirNomeArquivo(req.file.originalname),
       paginas,
       texto,
     });
@@ -189,7 +204,7 @@ app.post('/api/questoes/extrair-docx', uploadDocx.single('arquivo'), async (req,
     const { texto, avisos } = await extrairTextoDocx(req.file.buffer);
 
     return res.json({
-      nomeArquivo: req.file.originalname,
+      nomeArquivo: corrigirNomeArquivo(req.file.originalname),
       texto,
       avisos,
     });
@@ -206,7 +221,7 @@ app.post('/api/questoes/extrair-imagem', uploadImagem.single('arquivo'), async (
       return res.status(400).json({ erro: 'Nenhuma imagem enviada. Use o campo "arquivo".' });
     }
     const { texto, confianca } = await extrairTextoImagem(req.file.buffer);
-    return res.json({ nomeArquivo: req.file.originalname, texto, confianca });
+    return res.json({ nomeArquivo: corrigirNomeArquivo(req.file.originalname), texto, confianca });
   } catch (err) {
     console.error('Erro ao reconhecer texto da imagem:', err.message);
     return res.status(500).json({ erro: 'Falha ao ler o texto da imagem.', detalhe: err.message });
