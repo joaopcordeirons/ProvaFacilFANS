@@ -309,10 +309,16 @@ async function extrairTextoPdfComOcrDeImagens(buffer) {
     data: new Uint8Array(buffer),
     disableFontFace: true,
     isEvalSupported: false,
-    standardFontDataUrl: path.join(
-      path.dirname(require.resolve('pdfjs-dist/package.json')),
-      'standard_fonts/'
-    ),
+    // IMPORTANTE: não usar require.resolve('pdfjs-dist/...') aqui. O
+    // empacotador da Vercel (@vercel/nft) decide quais arquivos incluir no
+    // bundle rastreando estaticamente os require()/import() do código; ele
+    // não reconhece require.resolve(string) do mesmo jeito, então esse
+    // caminho calculado dinamicamente ficava de fora do deploy e o require
+    // falhava em runtime com "Cannot find module". Por isso o caminho é
+    // montado à mão a partir de __dirname, igual já fazemos com os
+    // .traineddata/.wasm — e o "includeFiles" do vercel.json garante que a
+    // pasta standard_fonts/ realmente vai junto no bundle.
+    standardFontDataUrl: path.join(__dirname, 'node_modules', 'pdfjs-dist', 'standard_fonts') + path.sep,
   }).promise;
 
   const totalPaginas = documento.numPages;
