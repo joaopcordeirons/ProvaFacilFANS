@@ -7,7 +7,7 @@ const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const path = require('path');
 const sharp = require('sharp');
-const { createWorker } = require('tesseract.js');
+const { createWorker, PSM } = require('tesseract.js');
 
 const TEMPO_MAXIMO_OCR_MS = 45_000;
 const TEMPO_MAXIMO_PREPARO_MS = 15_000;
@@ -157,6 +157,21 @@ async function comWorkerOcrTemporario(fn) {
     },
   });
   console.log('[ocr] worker pronto, reconhecendo texto...');
+  // PSM.SINGLE_BLOCK (6): assume que a imagem é um único bloco de texto
+  // (sem colunas, tabelas ou layout complexo). O modo automático padrão
+  // às vezes tenta segmentar código/enunciado em regiões separadas de
+  // forma equivocada, o que piora ainda mais o reconhecimento em imagens
+  // já degradadas (baixa resolução, texto colado como print). Também
+  // preservamos espaços múltiplos, já que indentação de código carrega
+  // significado.
+  try {
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      preserve_interword_spaces: '1',
+    });
+  } catch (err) {
+    console.error('[ocr] não foi possível ajustar parâmetros do Tesseract (seguindo com os padrões):', err.message);
+  }
   try {
     return await fn(worker);
   } finally {
@@ -204,9 +219,15 @@ async function prepararImagemParaOcr(buffer) {
       pipeline = pipeline.resize({ width: LARGURA_MAXIMA_OCR });
     }
 
-    // Escala de cinza + normalização de contraste + leve nitidez: ajuda
-    // muito em fotos com sombra, papel amarelado ou iluminação irregular.
-    pipeline = pipeline.grayscale().normalize().sharpen();
+    // Escala de cinza + normalização de contraste. Em seguida, um filtro
+    // de mediana leve remove o ruído "pixelado" típico de imagens pequenas
+    // que precisaram ser bastante ampliadas (ex.: prints de baixa
+    // resolução colados em PDF) — sem esse passo, o sharpen logo depois
+    // amplifica esse ruído em vez de só realçar os traços das letras.
+    // sigma menor que o padrão do sharp evita halos exagerados ao redor
+    // de fontes monoespaçadas/código, que costumam piorar o OCR em vez
+    // de ajudar.
+    pipeline = pipeline.grayscale().normalize().median(1).sharpen({ sigma: 1 });
 
     return await pipeline.png().toBuffer();
   } catch (err) {
