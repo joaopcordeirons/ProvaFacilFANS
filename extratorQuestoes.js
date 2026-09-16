@@ -173,6 +173,17 @@ async function identificarQuestoes(textoBruto) {
 
   const linhas = textoLimpo.split('\n');
 
+  // Texto antes do primeiro "1)"/"2)"/"Questão 3)" etc. Hoje esse texto
+  // simplesmente sumia (nunca entrava em nenhum bloco). O problema: às
+  // vezes ele NÃO é ruído de cabeçalho, é o enunciado de verdade — ex.:
+  // "Utilizando o AFD..., realize a análise léxica dos códigos a seguir"
+  // seguido de "1) void main()...", "2) void main()...". Guardamos aqui
+  // pra decidir o que fazer com ele mais abaixo, em vez de descartar.
+  const indicePrimeiraNumeracao = linhas.findIndex((linha) => REGEX_INICIO_QUESTAO.test(linha));
+  const preambulo = indicePrimeiraNumeracao > 0
+    ? linhas.slice(0, indicePrimeiraNumeracao).join('\n').trim()
+    : '';
+
   // Agrupa as linhas em blocos, começando um novo bloco toda vez que uma
   // linha bate no padrão de início de questão ("1.", "Questão 2)", ...).
   const blocosNumerados = [];
@@ -187,11 +198,33 @@ async function identificarQuestoes(textoBruto) {
   }
   if (blocoAtual) blocosNumerados.push(blocoAtual);
 
+  // Um "1)", "2)"... só é de fato o início de uma questão NOVA quando cada
+  // bloco parece uma questão completa e independente (tem "?" ou um verbo
+  // de comando próprio, tipo "explique", "calcule"...). Quando nenhum
+  // bloco tem isso E existe um enunciado introdutório mencionando "a
+  // seguir"/"abaixo"/"seguintes", é sinal de que os itens numerados são só
+  // dados a analisar (códigos, frases, casos) dentro de UMA questão só —
+  // como nesta lista de exercícios de análise léxica. Nesse caso não
+  // dividimos: mantemos tudo (enunciado + itens numerados) junto.
+  const preambuloIndicaListaDeItens = preambulo.length >= 30 &&
+    /(a seguir|abaixo|seguintes)\b/i.test(preambulo);
+  const algumBlocoPareceQuestaoPropria = blocosNumerados.some((bloco) =>
+    /\?/.test(bloco) || contemPalavraDeEnunciado(bloco)
+  );
+
   let blocosBrutos;
-  if (blocosNumerados.length >= 1) {
+  if (preambuloIndicaListaDeItens && blocosNumerados.length >= 2 && !algumBlocoPareceQuestaoPropria) {
+    blocosBrutos = [textoLimpo];
+  } else if (blocosNumerados.length >= 1) {
     // Achou numeração de verdade — é o sinal mais confiável que existe,
-    // usa direto (mesmo que seja só uma questão numerada sozinha).
+    // usa direto (mesmo que seja só uma questão numerada sozinha). O
+    // enunciado introdutório, se houver, vai colado no início do primeiro
+    // bloco em vez de descartado — ele normalmente é contexto real da
+    // questão 1 (ex.: "Leia o texto abaixo" antes do "1) O que significa...").
     blocosBrutos = blocosNumerados;
+    if (preambulo) {
+      blocosBrutos[0] = `${preambulo}\n${blocosBrutos[0]}`;
+    }
   } else {
     // Sem numeração (ou só uma "numeração" isolada, que pode ser coincidência
     // — ex.: um "1)" que era na verdade parte do enunciado). Nesse caso, o
