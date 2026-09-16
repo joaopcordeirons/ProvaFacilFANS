@@ -256,6 +256,32 @@
     font-weight: 600;
   }
   .meta { font-size: 0.8rem; color: var(--ink-muted); margin-bottom: 0.75rem; font-family: var(--mono); }
+  .aviso-ocr-ia {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: var(--amber-soft);
+    color: var(--amber);
+    border: 1px solid var(--amber);
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.84rem;
+  }
+  .aviso-ocr-ia button {
+    flex-shrink: 0;
+    border: 1px solid var(--accent);
+    background: var(--surface);
+    border-radius: 5px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-family: var(--sans);
+    cursor: pointer;
+    color: var(--accent);
+  }
+  .aviso-ocr-ia button:hover { background: var(--accent-soft); }
+  .aviso-ocr-ia button:disabled { opacity: 0.5; cursor: not-allowed; }
   textarea {
     width: 100%;
     min-height: 260px;

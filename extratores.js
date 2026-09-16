@@ -392,7 +392,13 @@ async function extrairTextoPdfComOcrDeImagens(buffer) {
     );
   }
 
-  return { texto: textoPorPagina.join('\n\n').trim(), paginas: totalPaginas };
+  // "paginasComImagem" volta pro chamador (endpoint /extrair-pdf) mesmo
+  // esse OCR local já tendo rodado nelas — é o que permite o front-end
+  // oferecer, como um passo OPCIONAL e sob demanda, a varredura via IA
+  // multimodal (ver ocrIA.js) como segunda tentativa nessas mesmas
+  // páginas, para quando o Tesseract erra muito (comum em prints de
+  // código-fonte com símbolos e nomes técnicos).
+  return { texto: textoPorPagina.join('\n\n').trim(), paginas: totalPaginas, paginasComImagem };
 }
 
 async function extrairTextoPdf(buffer) {
@@ -402,8 +408,11 @@ async function extrairTextoPdf(buffer) {
   } catch (err) {
     console.error('[pdf] extração avançada (pdfjs + OCR de imagens embutidas) falhou; usando fallback simples só com texto nativo:', err.message);
   }
+  // Fallback simples: sem pdfjs/@napi-rs/canvas não há como detectar
+  // páginas com imagem, então "paginasComImagem" volta vazio (o front-end
+  // simplesmente não oferece a varredura com IA nesse caso).
   const resultado = await pdfParse(buffer);
-  return { texto: resultado.text.trim(), paginas: resultado.numpages };
+  return { texto: resultado.text.trim(), paginas: resultado.numpages, paginasComImagem: [] };
 }
 
 async function extrairTextoDocx(buffer) {
@@ -453,4 +462,19 @@ async function extrairTextoImagem(buffer) {
   }
 }
 
-module.exports = { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem, comLimiteDeTempo };
+module.exports = {
+  extrairTextoPdf,
+  extrairTextoDocx,
+  extrairTextoImagem,
+  comLimiteDeTempo,
+  // Reaproveitados por ocrIA.js (varredura multimodal opcional), pra não
+  // duplicar a leitura de PDF via pdfjs-dist/@napi-rs/canvas nem a lógica
+  // de mesclar texto nativo com texto reconhecido — mesmos helpers usados
+  // aqui em cima pro OCR local (Tesseract).
+  carregarPdfjsLib,
+  carregarCanvasLib,
+  paginaContemImagem,
+  renderizarPaginaComoPng,
+  extrairTextoNativoDaPagina,
+  mesclarTextoNativoComOcrDaPagina,
+};

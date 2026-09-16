@@ -55,11 +55,23 @@ function extrairJson(textoResposta) {
 // Faz uma única chamada ao Gemini e devolve o texto bruto da resposta.
 // Lança erro (com .status quando vier da API) em vez de decidir sozinho
 // se tenta de novo — isso é responsabilidade de chamarGeminiJson.
-async function chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador) {
+//
+// "imagens" (opcional) é um array de { mimeType, dadosBase64 } — usado só
+// pela varredura multimodal de PDF (ver ocrIA.js). Cada imagem vira uma
+// parte "inlineData" adicional no mesmo request, junto com o prompt em
+// texto; sem imagens, o comportamento é idêntico ao de antes.
+async function chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador, imagens = []) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
+    const partes = [
+      { text: prompt },
+      ...imagens.map((imagem) => ({
+        inlineData: { mimeType: imagem.mimeType, data: imagem.dadosBase64 },
+      })),
+    ];
+
     const resposta = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: {
@@ -73,7 +85,7 @@ async function chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador)
         'x-goog-api-key': apiKey,
       },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: partes }],
         generationConfig: {
           temperature: 0,
           maxOutputTokens,
@@ -140,7 +152,7 @@ async function chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador)
 // Lança erro estruturado (.status, .ehDiario, .semChave) se todas as
 // tentativas falharem — use mensagemDeErro() pra converter isso numa
 // mensagem pronta pro professor.
-async function chamarGeminiJson({ apiKey, prompt, maxOutputTokens = 300, nomeChamador = 'geminiClient' }) {
+async function chamarGeminiJson({ apiKey, prompt, maxOutputTokens = 300, nomeChamador = 'geminiClient', imagens = [] }) {
   if (!apiKey) {
     const erro = new Error('GEMINI_API_KEY não configurada no servidor.');
     erro.semChave = true;
@@ -150,7 +162,7 @@ async function chamarGeminiJson({ apiKey, prompt, maxOutputTokens = 300, nomeCha
   let ultimoErro;
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
     try {
-      const textoResposta = await chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador);
+      const textoResposta = await chamarGeminiUmaVez(apiKey, prompt, maxOutputTokens, nomeChamador, imagens);
       try {
         return extrairJson(textoResposta);
       } catch (erroParse) {

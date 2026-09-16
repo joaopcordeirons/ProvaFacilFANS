@@ -121,6 +121,10 @@
               <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
             </h2>
             <div class="meta" id="meta"></div>
+            <div class="aviso-ocr-ia oculto" id="avisoOcrIA">
+              <span id="avisoOcrIATexto"></span>
+              <button type="button" class="corrigir" id="btnOcrIA">Tentar com IA</button>
+            </div>
             <div class="status" id="statusIdentificacao"></div>
             <div id="listaQuestoesIdentificadas"></div>
             <details class="bruto">
@@ -187,6 +191,9 @@
   const btnEnviar = document.getElementById('btnEnviar');
   const statusEl = document.getElementById('status');
   const cardResultado = document.getElementById('cardResultado');
+  const avisoOcrIA = document.getElementById('avisoOcrIA');
+  const avisoOcrIATexto = document.getElementById('avisoOcrIATexto');
+  const btnOcrIA = document.getElementById('btnOcrIA');
   const metaEl = document.getElementById('meta');
   const textoEl = document.getElementById('textoExtraido');
   const btnCopiar = document.getElementById('btnCopiar');
@@ -276,6 +283,7 @@
     statusEl.textContent = tipo === 'imagem' ? 'Lendo imagem com OCR (a primeira pode demorar mais)...' : 'Extraindo...';
     statusEl.className = 'status';
     cardResultado.classList.add('oculto');
+    avisoOcrIA.classList.add('oculto');
 
     const formData = new FormData();
     formData.append('arquivo', arquivoSelecionado);
@@ -315,12 +323,79 @@
       textoEl.value = dados.texto || '(nenhum texto encontrado)';
       cardResultado.classList.remove('oculto');
 
+      // PDF com página(s) contendo imagem: o texto acima já veio do OCR
+      // local (Tesseract, automático — ver extratores.js), mas ele erra
+      // bastante em prints de código-fonte. Oferece, como passo OPCIONAL,
+      // uma segunda leitura via IA multimodal só se o professor confirmar.
+      const temPaginaComImagem = tipo === 'pdf' && Array.isArray(dados.paginasComImagem) && dados.paginasComImagem.length > 0;
+      if (temPaginaComImagem) {
+        avisoOcrIATexto.textContent = `Detectamos ${dados.paginasComImagem.length} página(s) com imagem neste PDF — o texto acima veio do OCR local, que pode errar em código-fonte ou símbolos. Quer tentar ler de novo com IA?`;
+        btnOcrIA.disabled = false;
+        btnOcrIA.textContent = 'Tentar com IA';
+        avisoOcrIA.classList.remove('oculto');
+      } else {
+        avisoOcrIA.classList.add('oculto');
+      }
+
       await identificarErenderizarQuestoes(dados.texto || '', tipo, arquivoSelecionado?.name || null, listaQuestoesIdentificadasEl, statusIdentificacaoEl);
     } catch (err) {
       statusEl.textContent = err.message;
       statusEl.className = 'status erro';
     } finally {
       btnEnviar.disabled = false;
+    }
+  });
+
+  // Varredura opcional via IA (Gemini Vision) nas mesmas páginas com
+  // imagem — reenvia o mesmo arquivo já selecionado para um endpoint à
+  // parte (/extrair-pdf-ia), que não roda no upload normal. Sobrescreve o
+  // texto extraído e reidentifica as questões; o professor revisa e
+  // decide o que salvar, igual já acontece com o resultado do OCR local.
+  btnOcrIA.addEventListener('click', async () => {
+    if (!arquivoSelecionado) return;
+
+    btnOcrIA.disabled = true;
+    btnOcrIA.textContent = 'Lendo com IA...';
+    statusEl.textContent = 'Rodando varredura com IA (pode demorar um pouco mais)...';
+    statusEl.className = 'status';
+
+    const formData = new FormData();
+    formData.append('arquivo', arquivoSelecionado);
+
+    try {
+      const resposta = await fetch(API_BASE + '/api/questoes/extrair-pdf-ia', {
+        method: 'POST',
+        body: formData,
+      });
+      const conteudo = await resposta.text();
+      let dados;
+      try {
+        dados = JSON.parse(conteudo);
+      } catch (_) {
+        throw new Error(
+          resposta.status >= 500
+            ? `A Vercel retornou um erro ${resposta.status}. Confira os logs da função. Detalhe: ${conteudo.slice(0, 180)}`
+            : conteudo.slice(0, 180) || 'Resposta inválida do servidor.'
+        );
+      }
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || 'Falha na varredura com IA.');
+      }
+
+      statusEl.textContent = (dados.paginasComFalha && dados.paginasComFalha.length)
+        ? `Varredura com IA concluída, mas ${dados.paginasComFalha.length} página(s) falharam (mantiveram o texto do OCR local nelas).`
+        : 'Varredura com IA concluída.';
+      statusEl.className = 'status ok';
+
+      textoEl.value = dados.texto || '(nenhum texto encontrado)';
+      await identificarErenderizarQuestoes(dados.texto || '', tipo, arquivoSelecionado?.name || null, listaQuestoesIdentificadasEl, statusIdentificacaoEl);
+    } catch (err) {
+      statusEl.textContent = err.message;
+      statusEl.className = 'status erro';
+    } finally {
+      btnOcrIA.disabled = false;
+      btnOcrIA.textContent = 'Tentar com IA';
     }
   });
 
