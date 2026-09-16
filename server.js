@@ -9,7 +9,6 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
-const { extrairTextoPdfComIA } = require('./ocrIA');
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
@@ -180,50 +179,16 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
-    const { texto, paginas, paginasComImagem } = await extrairTextoPdf(req.file.buffer);
+    const { texto, paginas } = await extrairTextoPdf(req.file.buffer);
 
     return res.json({
       nomeArquivo: corrigirNomeArquivo(req.file.originalname),
       paginas,
-      // Permite o front-end oferecer, como passo OPCIONAL, a varredura
-      // via IA (ver /extrair-pdf-ia abaixo) quando há página com imagem —
-      // o OCR local (Tesseract) acima já rodou automaticamente nelas.
-      paginasComImagem: paginasComImagem || [],
       texto,
     });
   } catch (err) {
     console.error('Erro ao extrair PDF:', err.message);
     return res.status(500).json({ erro: 'Falha ao processar o PDF.', detalhe: err.message });
-  }
-});
-
-// Varredura OPCIONAL de PDF via IA multimodal (Gemini Vision), sob
-// demanda — só chamada quando o professor confirma explicitamente, depois
-// que /extrair-pdf (acima) já rodou o OCR local automático e detectou
-// página(s) com imagem. Não substitui nem desativa o OCR local; é uma
-// segunda tentativa de leitura para quando o Tesseract erra muito (comum
-// em prints de código-fonte). Ver ocrIA.js.
-app.post('/api/questoes/extrair-pdf-ia', upload.single('arquivo'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
-    }
-
-    const resultado = await extrairTextoPdfComIA(req.file.buffer);
-    if (!resultado.disponivel) {
-      return res.status(503).json({ erro: resultado.motivo });
-    }
-
-    return res.json({
-      nomeArquivo: corrigirNomeArquivo(req.file.originalname),
-      paginas: resultado.paginas,
-      paginasProcessadas: resultado.paginasProcessadas,
-      paginasComFalha: resultado.paginasComFalha,
-      texto: resultado.texto,
-    });
-  } catch (err) {
-    console.error('Erro na varredura com IA do PDF:', err.message);
-    return res.status(500).json({ erro: 'Falha ao processar o PDF com IA.', detalhe: err.message });
   }
 });
 
