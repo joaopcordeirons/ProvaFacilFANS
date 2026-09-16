@@ -302,8 +302,16 @@ async function extrairTextoPdfComOcrDeImagens(buffer) {
   const canvasLib = carregarCanvasLib();
   if (!pdfjsLib || !canvasLib) return null;
 
-  const { getDocument, OPS } = pdfjsLib;
+  const { getDocument, OPS, GlobalWorkerOptions } = pdfjsLib;
   const { createCanvas } = canvasLib;
+
+  // Aponta explicitamente pro arquivo do worker do pdfjs-dist (em vez de
+  // deixar a biblioteca tentar resolver o caminho sozinha via import.meta.url
+  // relativo) — mesmo raciocínio do standardFontDataUrl acima: caminho fixo
+  // a partir de __dirname, garantido pelo "includeFiles" do vercel.json.
+  GlobalWorkerOptions.workerSrc = path.join(
+    __dirname, 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs'
+  );
 
   const documento = await getDocument({
     data: new Uint8Array(buffer),
