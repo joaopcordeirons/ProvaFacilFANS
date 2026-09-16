@@ -3,7 +3,7 @@
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": "{*.traineddata,node_modules/tesseract.js-core/*.wasm,node_modules/@napi-rs/canvas-linux-x64-gnu/*.node,node_modules/@napi-rs/canvas-linux-x64-musl/*.node,node_modules/pdfjs-dist/standard_fonts/**,node_modules/pdfjs-dist/cmaps/**,node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs}"
+      "includeFiles": "{*.traineddata,node_modules/tesseract.js-core/*.wasm,node_modules/@napi-rs/canvas-linux-x64-*/*.node,node_modules/pdfjs-dist/**}"
     }
   },
   "routes": [
