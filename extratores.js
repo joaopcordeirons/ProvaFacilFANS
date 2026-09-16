@@ -8,7 +8,6 @@ const mammoth = require('mammoth');
 const path = require('path');
 const sharp = require('sharp');
 const { createWorker } = require('tesseract.js');
-const { createCanvas } = require('@napi-rs/canvas');
 
 const TEMPO_MAXIMO_OCR_MS = 45_000;
 const TEMPO_MAXIMO_PREPARO_MS = 15_000;
@@ -161,13 +160,17 @@ async function prepararImagemParaOcr(buffer) {
   }
 }
 
+async function extrairTextoPdf(buffer) {
+  const resultado = await pdfParse(buffer);
+  return { texto: resultado.text.trim(), paginas: resultado.numpages };
+}
+
 async function extrairTextoDocx(buffer) {
   const resultado = await mammoth.extractRawText({ buffer });
   return { texto: resultado.value.trim(), avisos: resultado.messages.map((m) => m.message) };
 }
 
-async function extrairTextoImagem(buffer, opcoes = {}) {
-  const tempoMaximoOcrMs = opcoes.tempoMaximoOcrMs || TEMPO_MAXIMO_OCR_MS;
+async function extrairTextoImagem(buffer) {
   console.log(`[ocr] imagem recebida (${buffer.length} bytes), preparando...`);
 
   // Preparação com sharp tem seu próprio limite de tempo: sem isso, se o
@@ -191,8 +194,8 @@ async function extrairTextoImagem(buffer, opcoes = {}) {
           confianca: Math.round(resultado.data.confidence),
         };
       }),
-      tempoMaximoOcrMs,
-      `O OCR excedeu o limite de ${Math.round(tempoMaximoOcrMs / 1000)} segundos. Tente uma imagem menor ou mais nítida.`
+      TEMPO_MAXIMO_OCR_MS,
+      'O OCR excedeu o limite de 45 segundos. Tente uma imagem menor ou mais nítida.'
     );
   } catch (err) {
     console.error('[ocr] erro durante o reconhecimento:', err);
@@ -207,114 +210,6 @@ async function extrairTextoImagem(buffer, opcoes = {}) {
         : mensagem
     );
   }
-}
-
-// ---------- Fallback de OCR para PDFs com conteúdo colado como imagem ----------
-//
-// Alguns PDFs (ex.: um print/screenshot de código colado dentro do
-// documento) têm texto "de verdade" só no cabeçalho/rodapé — o resto são
-// só pixels. O pdf-parse não tem como ler isso, porque não é texto. Se o
-// texto extraído for curto demais pra quantidade de páginas, renderizamos
-// cada página como imagem e rodamos o mesmo OCR usado no upload de imagem.
-//
-// Isso roda dentro de um orçamento de tempo (a função na Vercel tem um
-// limite de execução total) e de um número máximo de páginas — se estourar
-// qualquer um dos dois, paramos e devolvemos o que já foi processado, com
-// um aviso, em vez de travar a requisição inteira.
-const LIMIAR_MEDIO_CARACTERES_POR_PAGINA = 150;
-const ORCAMENTO_TOTAL_OCR_FALLBACK_MS = 35_000;
-const TEMPO_MAXIMO_OCR_POR_PAGINA_MS = 25_000;
-const TEMPO_MAXIMO_RENDER_PAGINA_MS = 15_000;
-const PAGINAS_MAXIMAS_OCR_FALLBACK = 6;
-const ESCALA_RENDER_PAGINA = 2.0; // resolução maior ajuda o OCR
-
-async function renderizarPaginaComoImagem(pdfjsDoc, numeroPagina) {
-  const pagina = await pdfjsDoc.getPage(numeroPagina);
-  const viewport = pagina.getViewport({ scale: ESCALA_RENDER_PAGINA });
-  const canvas = createCanvas(viewport.width, viewport.height);
-  const contexto = canvas.getContext('2d');
-  await pagina.render({ canvasContext: contexto, viewport }).promise;
-  return canvas.toBuffer('image/png');
-}
-
-async function tentarOcrDeFallbackNoPdf(buffer, numeroDePaginas) {
-  // pdfjs-dist é ESM; extratores.js é CommonJS, então o import precisa ser
-  // dinâmico (funciona normalmente dentro de uma função async, mesmo em
-  // arquivo CJS).
-  let pdfjsLib;
-  let doc;
-  try {
-    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer), disableFontFace: true }).promise;
-  } catch (err) {
-    console.error('[pdf] falha ao abrir o PDF para renderização (fallback de OCR abortado):', err.message);
-    return { texto: '', paginasProcessadas: 0, incompleto: false, erro: true };
-  }
-
-  const paginasParaProcessar = Math.min(doc.numPages, PAGINAS_MAXIMAS_OCR_FALLBACK);
-  const inicio = Date.now();
-  const blocos = [];
-  let paginasProcessadas = 0;
-
-  for (let i = 1; i <= paginasParaProcessar; i++) {
-    if (Date.now() - inicio > ORCAMENTO_TOTAL_OCR_FALLBACK_MS) {
-      console.warn(`[pdf] orçamento de tempo do OCR de fallback esgotado após ${paginasProcessadas} de ${doc.numPages} página(s).`);
-      break;
-    }
-    try {
-      const imagemPagina = await comLimiteDeTempo(
-        renderizarPaginaComoImagem(doc, i),
-        TEMPO_MAXIMO_RENDER_PAGINA_MS,
-        `Renderização da página ${i} excedeu o tempo limite.`
-      );
-      const { texto: textoPagina } = await extrairTextoImagem(imagemPagina, { tempoMaximoOcrMs: TEMPO_MAXIMO_OCR_POR_PAGINA_MS });
-      if (textoPagina) blocos.push(textoPagina);
-      paginasProcessadas++;
-    } catch (err) {
-      console.error(`[pdf] falha no OCR da página ${i} (seguindo para a próxima):`, err.message);
-    }
-  }
-
-  return {
-    texto: blocos.join('\n\n').trim(),
-    paginasProcessadas,
-    incompleto: paginasProcessadas < doc.numPages,
-    erro: false,
-  };
-}
-
-async function extrairTextoPdf(buffer) {
-  const resultado = await pdfParse(buffer);
-  const textoDireto = resultado.text.trim();
-  const mediaPorPagina = resultado.numpages > 0 ? textoDireto.length / resultado.numpages : textoDireto.length;
-
-  // Texto suficiente já veio direto — nem tenta OCR (mais rápido, e evita
-  // gastar tempo à toa em PDFs normais).
-  if (mediaPorPagina >= LIMIAR_MEDIO_CARACTERES_POR_PAGINA) {
-    return { texto: textoDireto, paginas: resultado.numpages };
-  }
-
-  // Pouco texto pra quantidade de páginas: suspeita de conteúdo colado
-  // como imagem (print/screenshot dentro do PDF, comum quando alguém cola
-  // um recorte de tela em vez de digitar). Tenta OCR de fallback, mas sem
-  // travar a resposta se algo falhar — nesse caso volta só o texto direto.
-  console.log(`[pdf] pouco texto extraído (${textoDireto.length} caractere(s) em ${resultado.numpages} página(s)) — tentando OCR de fallback.`);
-  const fallback = await tentarOcrDeFallbackNoPdf(buffer, resultado.numpages);
-
-  const partes = [textoDireto, fallback.texto].filter(Boolean);
-  const avisos = [];
-  if (fallback.texto) {
-    avisos.push('Parte do conteúdo veio de OCR automático (o PDF tinha texto colado como imagem) — revise com atenção, o OCR erra mais que texto extraído direto.');
-  }
-  if (fallback.incompleto) {
-    avisos.push(`Só deu tempo de processar ${fallback.paginasProcessadas} de ${resultado.numpages} página(s) por OCR — as demais podem estar faltando. Considere reenviar as páginas restantes pela aba "Imagem", uma de cada vez.`);
-  }
-
-  return {
-    texto: partes.join('\n\n').trim() || textoDireto,
-    paginas: resultado.numpages,
-    avisos: avisos.length ? avisos : undefined,
-  };
 }
 
 module.exports = { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem, comLimiteDeTempo };

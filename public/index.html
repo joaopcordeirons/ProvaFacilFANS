@@ -121,7 +121,6 @@
               <span><button class="copiar" id="btnCopiar">Copiar texto bruto</button></span>
             </h2>
             <div class="meta" id="meta"></div>
-            <div id="avisosExtracao"></div>
             <div class="status" id="statusIdentificacao"></div>
             <div id="listaQuestoesIdentificadas"></div>
             <details class="bruto">
@@ -312,11 +311,6 @@
       if (dados.avisos && dados.avisos.length) partesMeta.push(`${dados.avisos.length} aviso(s) de conversão`);
       if (typeof dados.confianca === 'number') partesMeta.push(`confiança OCR: ${dados.confianca}%`);
       metaEl.textContent = partesMeta.join(' · ');
-
-      const avisosExtracaoEl = document.getElementById('avisosExtracao');
-      avisosExtracaoEl.innerHTML = (dados.avisos || []).map((aviso) =>
-        `<div class="verificacao-conteudo alerta" style="margin-bottom:0.5rem;">${escapeHtml(aviso)}</div>`
-      ).join('');
 
       textoEl.value = dados.texto || '(nenhum texto encontrado)';
       cardResultado.classList.remove('oculto');
