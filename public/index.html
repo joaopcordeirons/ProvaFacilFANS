@@ -140,19 +140,25 @@
 
         <aside class="resumo-prova">
           <div class="resumo-rotulo">Cabeçalho da prova</div>
-          <label class="campo">Título<input type="text" id="campoTitulo" value="Avaliação — Engenharia de Software"></label>
-          <label class="campo">Instituição<input type="text" id="campoInstituicao" value="FANS"></label>
-          <label class="campo">Disciplina<input type="text" id="campoDisciplina" value="Engenharia de Software"></label>
-          <label class="campo">Professor(a)<input type="text" id="campoProfessor" value="Carlos Eduardo"></label>
-          <label class="campo">Turma<input type="text" id="campoTurma" placeholder="5º período"></label>
+          <label class="campo">Avaliação de<input type="text" id="campoTitulo" value="Avaliação de Engenharia de Software"></label>
+          <label class="campo">Curso<input type="text" id="campoCurso" value="Engenharia de Software"></label>
+          <label class="campo">Período<input type="text" id="campoPeriodo" placeholder="5º período"></label>
+          <label class="campo">Etapa<input type="text" id="campoEtapa" placeholder="1ª"></label>
           <label class="campo">Data<input type="date" id="campoData"></label>
-          <label class="campo">Instruções<textarea id="campoInstrucoes" rows="3">Responda com caneta azul ou preta. Não é permitida consulta.</textarea></label>
+          <label class="campo">Valor da prova<input type="text" id="campoValorProva" value="10,0"></label>
+          <label class="campo">Professor(a)<input type="text" id="campoProfessor" value="Carlos Eduardo"></label>
+          <label class="campo">Orientações gerais (uma por linha)<textarea id="campoInstrucoes" rows="5">A avaliação deve ser realizada individualmente;
+Nesta prova não é admitida nenhuma forma de consulta a qualquer tipo material;
+Celulares e outros dispositivos de comunicação devem permanecer desligados e acondicionados debaixo das carteiras durante toda a duração da avaliação;
+Não será tolerado nenhum tipo de comunicação entre os alunos, sob pena de anulação da nota obtida;
+Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea></label>
           <label class="campo">Linhas de resposta (dissertativas)
             <input type="number" id="campoLinhas" min="0" max="20" value="5">
           </label>
           <button type="button" class="btn-escuro largo" id="btnGerarPdf">Gerar PDF da prova</button>
+          <button type="button" class="btn-secundario largo" id="btnGerarDocx">Gerar DOCX (editável no Word)</button>
           <div class="status" id="statusPdf"></div>
-          <a class="link-download oculto" id="linkPdf" download>Baixar o PDF novamente</a>
+          <a class="link-download oculto" id="linkPdf" download>Baixar o arquivo novamente</a>
         </aside>
       </div>
 

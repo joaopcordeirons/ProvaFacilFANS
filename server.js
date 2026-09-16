@@ -22,6 +22,8 @@ const {
   registrarUsoQuestoes,
 } = require('./firebase');
 const { montarPdfProva } = require('./provaPdf');
+const { montarDocxProva } = require('./provaDocx');
+const { nomeArquivo } = require('./modeloProva');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -190,13 +192,44 @@ app.put('/api/questoes/:id', express.json({ limit: '1mb' }), async (req, res) =>
   }
 });
 
-// Monta o PDF da prova com as questões selecionadas e devolve o arquivo
-// para download. As questões vêm do Firestore (o navegador manda só os
-// IDs e a ordem), e cada uma tem seu contador "usada em N provas"
-// incrementado depois que o PDF é gerado com sucesso.
-app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), async (req, res) => {
+// Monta a prova com as questões selecionadas, no modelo oficial da FANS,
+// e devolve o arquivo para download — em PDF (pronto para imprimir) ou em
+// DOCX (o mesmo layout, editável no Word). As questões vêm do Firestore
+// (o navegador manda só os IDs e a ordem), e cada uma tem seu contador
+// "usada em N provas" incrementado depois que o arquivo é gerado.
+const MIME_SAIDA = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
+function dadosDaProva(corpo, questoes) {
+  return {
+    titulo: corpo.titulo,
+    curso: corpo.curso || corpo.disciplina,
+    periodo: corpo.periodo || corpo.turma,
+    data: corpo.data,
+    etapa: corpo.etapa,
+    aluno: corpo.aluno,
+    valorProva: corpo.valorProva,
+    aprovacaoCoordenador: corpo.aprovacaoCoordenador,
+    professor: corpo.professor,
+    instrucoes: corpo.instrucoes,
+    linhasResposta: corpo.linhasResposta,
+    questoes: questoes.map((questao) => ({
+      texto: questao.texto,
+      valor: questao.valor,
+      ano: questao.ano,
+      banca: questao.banca,
+      orgao: questao.orgao,
+      prova: questao.prova,
+    })),
+  };
+}
+
+async function gerarProva(req, res, formato) {
   try {
-    const { questaoIds, titulo, instituicao, disciplina, professor, turma, data, instrucoes, linhasResposta } = req.body || {};
+    const corpo = req.body || {};
+    const { questaoIds } = corpo;
 
     if (!Array.isArray(questaoIds) || questaoIds.length === 0) {
       return res.status(400).json({ erro: 'Selecione pelo menos uma questão para montar a prova.' });
@@ -206,23 +239,27 @@ app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), async (req, re
     }
 
     const questoes = await buscarQuestoesPorIds(questaoIds);
-    const pdf = await montarPdfProva({
-      titulo, instituicao, disciplina, professor, turma, data, instrucoes, linhasResposta,
-      questoes: questoes.map((questao) => ({ texto: questao.texto, valor: questao.valor })),
-    });
+    const dados = dadosDaProva(corpo, questoes);
+    const arquivo = formato === 'docx'
+      ? montarDocxProva(dados)
+      : await montarPdfProva(dados);
 
     await registrarUsoQuestoes(questoes.map((questao) => questao.id));
 
-    const nomeArquivo = `${(titulo || 'prova').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'prova'}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
-    res.setHeader('Content-Length', pdf.length);
-    return res.end(pdf);
+    res.setHeader('Content-Type', MIME_SAIDA[formato]);
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo(corpo.titulo, formato)}"`);
+    res.setHeader('Content-Length', arquivo.length);
+    return res.end(arquivo);
   } catch (err) {
-    console.error('Erro ao gerar o PDF da prova:', err.message);
-    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao gerar o PDF da prova.' });
+    console.error(`Erro ao gerar a prova em ${formato.toUpperCase()}:`, err.message);
+    return res.status(err.statusCode || 500).json({
+      erro: err.message || `Falha ao gerar a prova em ${formato.toUpperCase()}.`,
+    });
   }
-});
+}
+
+app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'pdf'));
+app.post('/api/provas/gerar-docx', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'docx'));
 
 app.delete('/api/questoes/:id', async (req, res) => {
   try {

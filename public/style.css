@@ -475,7 +475,9 @@
     border-radius: 6px; padding: 0.55rem 0.9rem; font-size: 0.83rem;
     font-family: var(--sans); cursor: pointer; white-space: nowrap;
   }
-  .btn-secundario:hover { border-color: var(--rule-strong); background: var(--paper); }
+  .btn-secundario:hover:not(:disabled) { border-color: var(--rule-strong); background: var(--paper); }
+  .btn-secundario.largo { width: 100%; margin-top: 0.5rem; }
+  .btn-secundario:disabled { color: var(--ink-faint); cursor: not-allowed; }
   .btn-tracejado {
     width: 100%; background: transparent; color: var(--ink-muted);
     border: 1px dashed var(--rule-strong); border-radius: 6px;

@@ -1,6 +1,6 @@
 # ProvaFácil FANS — Extração e persistência de questões
 
-A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou imagem), extrai o texto para revisão e permite salvar a versão revisada no **Cloud Firestore**, banco de dados do Firebase. A partir do banco de questões, o professor monta a prova selecionando questões e **gera o PDF final pronto para impressão**.
+A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou imagem), extrai o texto para revisão e permite salvar a versão revisada no **Cloud Firestore**, banco de dados do Firebase. A partir do banco de questões, o professor monta a prova selecionando questões e **gera a prova final no modelo oficial "Caderno de Provas" da FANS**, em PDF (pronto para imprimir) ou em DOCX (o mesmo layout, editável no Word).
 
 ## Funcionalidades
 
@@ -13,13 +13,14 @@ A aplicação recebe um arquivo (questão enviada pelo professor em PDF, DOCX ou
 - Importação de mensagens e anexos de uma caixa Gmail via IMAP.
 - **Banco de Questões** em layout mestre-detalhe: filtros por período (atual/histórico) e por assunto, busca por palavra-chave, painel de detalhe com edição (`PUT /api/questoes/:id`) e exclusão.
 - **Montagem da prova** em 3 passos: seleção das questões (com soma automática dos valores em relação aos 10,0 pontos), revisão/reordenação e preenchimento do cabeçalho.
-- **Geração do PDF da prova** em `POST /api/provas/gerar-pdf`, com cabeçalho institucional, campos de aluno e nota, instruções, alternativas recuadas, linhas pautadas para dissertativas e numeração de páginas.
+- **Geração da prova no template oficial da FANS** (em ABNT) em `POST /api/provas/gerar-pdf` e `POST /api/provas/gerar-docx`: quadro de identificação com a logo (CURSO, DATA, ETAPA, PERÍODO, APROVAÇÃO DO COORDENADOR, ALUNO, VALOR), quadro de ORIENTAÇÕES GERAIS, faixas azuis `QUESTÃO N – (04 pontos)`, linha de referência `Ano/Banca/Órgão/Prova`, corpo em Arial 10 justificado, linhas pautadas para dissertativas e rodapé institucional em todas as páginas.
+- O DOCX é gerado a partir de `assets/Template-Avaliacao-FANS.docx`: o gerador troca apenas o `word/document.xml` do template, então estilos, numeração, fontes, margens, rodapé e logo continuam sendo os do arquivo aprovado pela coordenação.
 
 ## Como montar uma prova
 
 1. Em **Banco de Questões**, marque as questões desejadas (a seleção fica salva no navegador).
 2. Clique em **Montar prova** — o resumo mostra quantas questões vieram do período atual, quantas do histórico e quanto falta para fechar 10,0 pontos.
-3. Em **Continuar para revisão**, ajuste a ordem das questões, preencha título, disciplina, professor, turma, data e instruções e clique em **Gerar PDF da prova**. O download começa automaticamente e a prévia aparece na própria tela.
+3. Em **Continuar para revisão**, ajuste a ordem das questões, preencha os campos do cabeçalho (avaliação, curso, período, etapa, data, valor da prova, professor e as orientações gerais, uma por linha) e clique em **Gerar PDF da prova** ou em **Gerar DOCX (editável no Word)**. O download começa automaticamente; a prévia na tela aparece só para o PDF, já que o navegador não renderiza `.docx`.
 
 O PDF é montado no servidor a partir dos dados que estão no Firestore (o navegador envia apenas os IDs e a ordem), e cada questão usada tem seu contador "usada em N provas" incrementado.
 
@@ -60,5 +61,6 @@ Abra `http://localhost:3001`. Depois de extrair e revisar uma questão, use **Sa
 - `GET /api/questoes?limite=50`
 - `PUT /api/questoes/:id` — edita texto, assunto, período, ano e valor
 - `DELETE /api/questoes/:id`
-- `POST /api/provas/gerar-pdf` — corpo JSON: `{ "questaoIds": ["..."], "titulo": "...", "disciplina": "...", "professor": "...", "turma": "...", "data": "16/09/2026", "instrucoes": "...", "linhasResposta": 5 }` — responde com o arquivo PDF
+- `POST /api/provas/gerar-pdf` — corpo JSON: `{ "questaoIds": ["..."], "titulo": "Avaliação de Banco de Dados", "curso": "...", "periodo": "...", "etapa": "...", "data": "16/09/2026", "valorProva": "10,0", "professor": "...", "instrucoes": "uma orientação por linha", "linhasResposta": 5 }` — responde com o arquivo PDF
+- `POST /api/provas/gerar-docx` — mesmo corpo JSON do endpoint acima — responde com o arquivo `.docx` no mesmo modelo
 - `POST /api/questoes/verificar-email`

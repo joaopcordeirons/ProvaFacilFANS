@@ -23,7 +23,7 @@
   const previaPdfEl = document.getElementById('previaPdf');
   const painelPreviaPdfEl = document.getElementById('painelPreviaPdf');
 
-  let urlPdfAtual = null;
+  let urlArquivoAtual = null;
 
   /* --------------------------------------------- passo 2: seleção */
 
@@ -120,10 +120,12 @@
     if (!selecionadas.length) {
       listaRevisaoEl.innerHTML = '<div class="lista-vazia">Nenhuma questão selecionada. Volte para o passo 2.</div>';
       document.getElementById('btnGerarPdf').disabled = true;
+      document.getElementById('btnGerarDocx').disabled = true;
       return;
     }
 
     document.getElementById('btnGerarPdf').disabled = false;
+    document.getElementById('btnGerarDocx').disabled = false;
     listaRevisaoEl.innerHTML = selecionadas.map((questao, indice) => `
       <article class="item-revisao" data-id="${escapeHtml(questao.id)}">
         <div class="ordem">${indice + 1}</div>
@@ -156,16 +158,19 @@
     });
   }
 
-  /* --------------------------------------------- geração do PDF */
+  /* ------------------------------------ geração do arquivo da prova */
 
+  // Campos do quadro de identificação do template oficial da FANS
+  // (curso, período, etapa, data, valor) — os mesmos no PDF e no DOCX.
   function dadosDoCabecalho() {
     const dataEscolhida = document.getElementById('campoData').value;
     return {
       titulo: document.getElementById('campoTitulo').value.trim() || 'Avaliação',
-      instituicao: document.getElementById('campoInstituicao').value.trim(),
-      disciplina: document.getElementById('campoDisciplina').value.trim(),
+      curso: document.getElementById('campoCurso').value.trim(),
+      periodo: document.getElementById('campoPeriodo').value.trim(),
+      etapa: document.getElementById('campoEtapa').value.trim(),
+      valorProva: document.getElementById('campoValorProva').value.trim(),
       professor: document.getElementById('campoProfessor').value.trim(),
-      turma: document.getElementById('campoTurma').value.trim(),
       // O input type="date" devolve AAAA-MM-DD; a prova impressa usa o
       // formato brasileiro.
       data: dataEscolhida ? dataEscolhida.split('-').reverse().join('/') : '',
@@ -174,50 +179,72 @@
     };
   }
 
-  async function gerarPdf() {
-    const botao = document.getElementById('btnGerarPdf');
+  function nomeDoArquivo(titulo, extensao) {
+    const base = titulo
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'prova';
+    return `${base}.${extensao}`;
+  }
+
+  // PDF e DOCX saem no mesmo modelo; muda só o endpoint e o que dá para
+  // mostrar na tela (o navegador não pré-visualiza .docx).
+  async function gerarProva(formato) {
+    const botoes = [document.getElementById('btnGerarPdf'), document.getElementById('btnGerarDocx')];
     const ids = Estado.selecionadas.slice();
     if (!ids.length) return;
 
-    botao.disabled = true;
-    statusPdfEl.textContent = 'Montando o PDF...';
+    botoes.forEach((botao) => { botao.disabled = true; });
+    statusPdfEl.textContent = `Montando o ${formato.toUpperCase()}...`;
     statusPdfEl.className = 'status';
 
     try {
-      const resposta = await fetch(`${API_BASE}/api/provas/gerar-pdf`, {
+      const dados = dadosDoCabecalho();
+      const resposta = await fetch(`${API_BASE}/api/provas/gerar-${formato}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...dadosDoCabecalho(), questaoIds: ids }),
+        body: JSON.stringify({ ...dados, questaoIds: ids }),
       });
 
-      // Em caso de erro o servidor responde JSON, não PDF.
+      // Em caso de erro o servidor responde JSON, não o arquivo.
       if (!resposta.ok) {
         const erro = await resposta.json().catch(() => ({}));
-        throw new Error(erro.erro || `Falha ao gerar o PDF (HTTP ${resposta.status}).`);
+        throw new Error(erro.erro || `Falha ao gerar o ${formato.toUpperCase()} (HTTP ${resposta.status}).`);
       }
 
       const blob = await resposta.blob();
-      if (urlPdfAtual) URL.revokeObjectURL(urlPdfAtual);
-      urlPdfAtual = URL.createObjectURL(blob);
+      if (urlArquivoAtual) URL.revokeObjectURL(urlArquivoAtual);
+      urlArquivoAtual = URL.createObjectURL(blob);
 
-      const nomeArquivo = `${dadosDoCabecalho().titulo.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase() || 'prova'}.pdf`;
+      const nomeArquivo = nomeDoArquivo(dados.titulo, formato);
 
-      // Dispara o download e deixa a prévia na tela para conferência.
+      // Dispara o download.
       const ancoraTemporaria = document.createElement('a');
-      ancoraTemporaria.href = urlPdfAtual;
+      ancoraTemporaria.href = urlArquivoAtual;
       ancoraTemporaria.download = nomeArquivo;
       document.body.appendChild(ancoraTemporaria);
       ancoraTemporaria.click();
       ancoraTemporaria.remove();
 
-      linkPdfEl.href = urlPdfAtual;
+      linkPdfEl.href = urlArquivoAtual;
       linkPdfEl.download = nomeArquivo;
+      linkPdfEl.textContent = `Baixar o ${formato.toUpperCase()} novamente`;
       linkPdfEl.classList.remove('oculto');
 
-      previaPdfEl.src = urlPdfAtual;
-      painelPreviaPdfEl.classList.remove('oculto');
+      // Só o PDF dá para conferir na própria tela.
+      if (formato === 'pdf') {
+        previaPdfEl.src = urlArquivoAtual;
+        painelPreviaPdfEl.classList.remove('oculto');
+      } else {
+        previaPdfEl.removeAttribute('src');
+        painelPreviaPdfEl.classList.add('oculto');
+      }
 
-      statusPdfEl.textContent = `PDF gerado com ${ids.length} ${ids.length === 1 ? 'questão' : 'questões'}. O download começou automaticamente.`;
+      const plural = ids.length === 1 ? 'questão' : 'questões';
+      statusPdfEl.textContent = formato === 'pdf'
+        ? `PDF gerado com ${ids.length} ${plural}. O download começou automaticamente.`
+        : `DOCX gerado com ${ids.length} ${plural}. Abra no Word para editar antes de imprimir.`;
       statusPdfEl.className = 'status ok';
 
       // O contador "usada em N provas" mudou no servidor.
@@ -226,7 +253,7 @@
       statusPdfEl.textContent = err.message;
       statusPdfEl.className = 'status erro';
     } finally {
-      botao.disabled = false;
+      botoes.forEach((botao) => { botao.disabled = false; });
     }
   }
 
@@ -235,7 +262,8 @@
   document.getElementById('btnContinuarRevisao').addEventListener('click', () => mostrarView('revisao'));
   document.getElementById('btnAdicionarMais').addEventListener('click', () => mostrarView('banco'));
   document.getElementById('btnVoltarMontagem').addEventListener('click', () => mostrarView('montar'));
-  document.getElementById('btnGerarPdf').addEventListener('click', gerarPdf);
+  document.getElementById('btnGerarPdf').addEventListener('click', () => gerarProva('pdf'));
+  document.getElementById('btnGerarDocx').addEventListener('click', () => gerarProva('docx'));
 
   // Data de hoje já preenchida no cabeçalho da prova.
   const campoData = document.getElementById('campoData');

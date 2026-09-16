@@ -3,7 +3,7 @@
   "functions": {
     "server.js": {
       "maxDuration": 60,
-      "includeFiles": "{*.traineddata,node_modules/tesseract.js-core/*.wasm,node_modules/@napi-rs/canvas-linux-x64-*/*.node,node_modules/pdfjs-dist/**,node_modules/pdfkit/js/**,node_modules/pdfkit/package.json}"
+      "includeFiles": "{*.traineddata,assets/**,node_modules/tesseract.js-core/*.wasm,node_modules/@napi-rs/canvas-linux-x64-*/*.node,node_modules/pdfjs-dist/**,node_modules/pdfkit/js/**,node_modules/pdfkit/package.json}"
     }
   },
   "routes": [
