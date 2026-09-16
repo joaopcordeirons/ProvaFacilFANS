@@ -9,6 +9,20 @@
 
 const PDFDocument = require('pdfkit');
 
+// O pdfkit carrega as métricas das fontes padrão por subpath dinâmico
+// ("#standard-fonts/Helvetica"). Empacotadores que analisam o código
+// estaticamente — como o da Vercel — não enxergam esse require e deixam
+// os arquivos de fora, o que quebra a geração com
+// "Cannot find module .../standard-fonts/Helvetica.cjs" só em produção.
+// Os requires abaixo são apenas uma pista para o empacotador incluir os
+// arquivos; se falharem, o pdfkit ainda tenta resolver sozinho.
+try {
+  require('pdfkit/standard-fonts/Helvetica');
+  require('pdfkit/standard-fonts/HelveticaBold');
+} catch (err) {
+  console.warn('[provaPdf] Fontes padrão do pdfkit não pré-carregadas:', err.message);
+}
+
 const MARGEM = 56;            // ~2 cm
 const COR_TINTA = '#1b1d22';
 const COR_SUAVE = '#63666e';
