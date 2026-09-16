@@ -1,0 +1,1013 @@
+/* app.js
+ * Estado compartilhado, navegação entre telas, tela "Banco de Questões"
+ * (layout mestre-detalhe de 3 painéis) e o drawer "Adicionar questão".
+ *
+ * A montagem da prova e a geração do PDF ficam em montarProva.js, que lê
+ * o mesmo estado exposto aqui em window.App.
+ */
+
+const API_BASE = window.location.origin;
+const CHAVE_SELECAO = 'provafacil:selecao';
+
+const Estado = {
+  questoes: [],                // tudo que veio do Firestore, na ordem do banco
+  selecionadas: [],            // IDs escolhidos para a prova, na ordem de escolha
+  detalheId: null,             // questão aberta no painel de detalhe
+  filtro: { periodo: 'todas', assunto: null, palavraChave: '', assunto_busca: '' },
+  editando: false,
+};
+
+/* ---------------------------------------------------------------- utilidades */
+
+function escapeHtml(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto == null ? '' : texto;
+  return div.innerHTML;
+}
+
+function formatarPontos(valor) {
+  const numero = Number(valor);
+  return (Number.isFinite(numero) ? numero : 0).toFixed(1).replace('.', ',');
+}
+
+function textoLimpo(questao) {
+  return String(questao.texto || '').replace(/\s+/g, ' ').trim();
+}
+
+function resumir(texto, limite) {
+  return texto.length > limite ? `${texto.slice(0, limite)}…` : texto;
+}
+
+function rotuloPeriodo(questao) {
+  if (questao.periodo === 'historico') {
+    return questao.ano ? `Histórico · ${questao.ano}` : 'Histórico';
+  }
+  return 'Período atual';
+}
+
+// A seleção sobrevive a um F5 — o professor pode montar a prova em duas
+// sentadas. Se o navegador bloquear o localStorage, a tela continua
+// funcionando só perde essa memória.
+function lerSelecaoSalva() {
+  try {
+    const bruto = localStorage.getItem(CHAVE_SELECAO);
+    const lista = bruto ? JSON.parse(bruto) : [];
+    return Array.isArray(lista) ? lista.filter((id) => typeof id === 'string') : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function salvarSelecao() {
+  try {
+    localStorage.setItem(CHAVE_SELECAO, JSON.stringify(Estado.selecionadas));
+  } catch (_) { /* seleção fica só em memória */ }
+}
+
+function estaSelecionada(id) {
+  return Estado.selecionadas.includes(id);
+}
+
+function alternarSelecao(id) {
+  const posicao = Estado.selecionadas.indexOf(id);
+  if (posicao >= 0) Estado.selecionadas.splice(posicao, 1);
+  else Estado.selecionadas.push(id);
+  salvarSelecao();
+}
+
+function questaoPorId(id) {
+  return Estado.questoes.find((questao) => questao.id === id) || null;
+}
+
+function questoesSelecionadas() {
+  return Estado.selecionadas.map(questaoPorId).filter(Boolean);
+}
+
+function pontuacaoSelecionada() {
+  return questoesSelecionadas().reduce((soma, questao) => soma + Number(questao.valor || 0), 0);
+}
+
+async function pedirJson(caminho, opcoes) {
+  const resposta = await fetch(API_BASE + caminho, opcoes);
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.erro || 'Falha na comunicação com o servidor.');
+  return dados;
+}
+
+/* ---------------------------------------------------------------- navegação */
+
+const VIEWS = { banco: 'viewBanco', montar: 'viewMontar', revisao: 'viewRevisao' };
+
+function mostrarView(nome) {
+  Object.entries(VIEWS).forEach(([chave, id]) => {
+    document.getElementById(id).classList.toggle('oculto', chave !== nome);
+  });
+  document.querySelectorAll('.nav-item[data-ir-para]').forEach((botao) => {
+    const alvo = botao.dataset.irPara;
+    botao.classList.toggle('ativo', alvo === nome || (nome === 'revisao' && alvo === 'montar'));
+  });
+  window.scrollTo({ top: 0 });
+
+  if (nome === 'montar') window.MontagemProva?.renderizarMontagem();
+  if (nome === 'revisao') window.MontagemProva?.renderizarRevisao();
+}
+
+document.querySelectorAll('.nav-item[data-ir-para]').forEach((botao) => {
+  botao.addEventListener('click', () => mostrarView(botao.dataset.irPara));
+});
+
+/* -------------------------------------------- Banco de Questões (3 painéis) */
+
+const filtrosPeriodoEl = document.getElementById('filtrosPeriodo');
+const filtrosAssuntoEl = document.getElementById('filtrosAssunto');
+const listaQuestoesEl = document.getElementById('listaQuestoes');
+const resumoListaEl = document.getElementById('resumoLista');
+const painelDetalheEl = document.getElementById('painelDetalhe');
+const buscaPalavraChaveEl = document.getElementById('buscaPalavraChave');
+const buscaAssuntoEl = document.getElementById('buscaAssunto');
+
+// Filtro do painel da esquerda (período/assunto) + as duas buscas do topo.
+function questoesFiltradas() {
+  const { periodo, assunto, palavraChave, assunto_busca: assuntoBusca } = Estado.filtro;
+  return Estado.questoes.filter((questao) => {
+    if (periodo !== 'todas' && questao.periodo !== periodo) return false;
+    if (assunto && questao.assunto !== assunto) return false;
+    if (assuntoBusca && !String(questao.assunto || '').toLowerCase().includes(assuntoBusca)) return false;
+    if (palavraChave && !textoLimpo(questao).toLowerCase().includes(palavraChave)) return false;
+    return true;
+  });
+}
+
+function renderizarFiltros() {
+  const total = Estado.questoes.length;
+  const atuais = Estado.questoes.filter((questao) => questao.periodo === 'atual').length;
+
+  const periodos = [
+    ['todas', 'Todas as questões', total],
+    ['atual', 'Período atual', atuais],
+    ['historico', 'Histórico', total - atuais],
+  ];
+  filtrosPeriodoEl.innerHTML = periodos.map(([chave, rotulo, quantidade]) => `
+    <button type="button" class="filtro-item ${Estado.filtro.periodo === chave ? 'ativo' : ''}" data-periodo="${chave}">
+      <span>${rotulo}</span><span class="filtro-contagem">${quantidade}</span>
+    </button>
+  `).join('');
+
+  const porAssunto = new Map();
+  Estado.questoes.forEach((questao) => {
+    const assunto = questao.assunto || 'Outros';
+    porAssunto.set(assunto, (porAssunto.get(assunto) || 0) + 1);
+  });
+
+  const assuntos = [...porAssunto.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  filtrosAssuntoEl.innerHTML = assuntos.length
+    ? assuntos.map(([assunto, quantidade]) => `
+        <button type="button" class="filtro-item ${Estado.filtro.assunto === assunto ? 'ativo' : ''}" data-assunto="${escapeHtml(assunto)}">
+          <span>${escapeHtml(assunto)}</span><span class="filtro-contagem">${quantidade}</span>
+        </button>
+      `).join('')
+    : '<div class="filtro-vazio">Nenhum assunto cadastrado ainda.</div>';
+
+  // Alimenta o autocomplete de assunto usado no drawer e na edição.
+  document.getElementById('assuntosConhecidos').innerHTML = assuntos
+    .map(([assunto]) => `<option value="${escapeHtml(assunto)}">`).join('');
+
+  filtrosPeriodoEl.querySelectorAll('[data-periodo]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      Estado.filtro.periodo = botao.dataset.periodo;
+      renderizarBanco();
+    });
+  });
+  filtrosAssuntoEl.querySelectorAll('[data-assunto]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      // Clicar de novo no assunto já ativo limpa o filtro.
+      Estado.filtro.assunto = Estado.filtro.assunto === botao.dataset.assunto ? null : botao.dataset.assunto;
+      renderizarBanco();
+    });
+  });
+}
+
+function renderizarLista() {
+  const questoes = questoesFiltradas();
+
+  const plural = (quantidade, singular, plural_) => `${quantidade} ${quantidade === 1 ? singular : plural_}`;
+  resumoListaEl.textContent = `${plural(questoes.length, 'questão', 'questões')} · ${plural(Estado.selecionadas.length, 'selecionada', 'selecionadas')} p/ prova`;
+
+  if (!questoes.length) {
+    listaQuestoesEl.innerHTML = '<div class="lista-vazia">Nenhuma questão encontrada com esses filtros.</div>';
+    return;
+  }
+
+  // Mantém o detalhe apontando para algo visível na lista.
+  if (!questoes.some((questao) => questao.id === Estado.detalheId)) {
+    Estado.detalheId = questoes[0].id;
+    Estado.editando = false;
+  }
+
+  listaQuestoesEl.innerHTML = questoes.map((questao) => `
+    <article class="item-questao ${questao.id === Estado.detalheId ? 'aberta' : ''}" data-id="${escapeHtml(questao.id)}">
+      <button type="button" class="caixa-selecao ${estaSelecionada(questao.id) ? 'marcada' : ''}"
+        data-selecionar="${escapeHtml(questao.id)}"
+        aria-label="${estaSelecionada(questao.id) ? 'Remover da prova' : 'Adicionar à prova'}"></button>
+      <div class="item-corpo">
+        <div class="item-cabecalho">
+          <span class="codigo">${escapeHtml(questao.codigo)}</span>
+          <span class="pontos">${formatarPontos(questao.valor)} pts</span>
+        </div>
+        <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 110) || '(vazio)')}</p>
+        <div class="item-meta">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}</div>
+      </div>
+    </article>
+  `).join('');
+
+  listaQuestoesEl.querySelectorAll('.item-questao').forEach((elemento) => {
+    elemento.addEventListener('click', () => {
+      Estado.detalheId = elemento.dataset.id;
+      Estado.editando = false;
+      renderizarBanco();
+    });
+  });
+  listaQuestoesEl.querySelectorAll('[data-selecionar]').forEach((botao) => {
+    botao.addEventListener('click', (evento) => {
+      evento.stopPropagation(); // marcar não deve trocar o detalhe aberto
+      alternarSelecao(botao.dataset.selecionar);
+      renderizarBanco();
+    });
+  });
+}
+
+function renderizarDetalhe() {
+  const questao = questaoPorId(Estado.detalheId);
+
+  if (!questao) {
+    painelDetalheEl.innerHTML = '<div class="detalhe-vazio">Selecione uma questão na lista para ver os detalhes.</div>';
+    return;
+  }
+
+  if (Estado.editando) {
+    renderizarFormularioEdicao(questao);
+    return;
+  }
+
+  const selecionada = estaSelecionada(questao.id);
+  painelDetalheEl.innerHTML = `
+    <div class="detalhe-topo">
+      <div class="detalhe-identificacao">
+        <span class="codigo">${escapeHtml(questao.codigo)}</span>
+        <span class="etiqueta">${escapeHtml(rotuloPeriodo(questao).toUpperCase())}</span>
+      </div>
+      <div class="detalhe-acoes-topo">
+        <button type="button" class="btn-secundario" id="btnEditarQuestao">Editar</button>
+        <button type="button" class="btn-tracejado compacto" id="btnRemoverQuestao">Remover</button>
+      </div>
+    </div>
+
+    <h2 class="detalhe-assunto">${escapeHtml(questao.assunto)}</h2>
+    <blockquote class="detalhe-enunciado">${escapeHtml(questao.texto || '(vazio)')}</blockquote>
+
+    <dl class="detalhe-dados">
+      <div><dt>Valor</dt><dd>${formatarPontos(questao.valor)} pts</dd></div>
+      <div><dt>Origem</dt><dd>${escapeHtml(questao.tipoOrigem || 'manual')}</dd></div>
+      <div><dt>Usada em</dt><dd>${questao.usadaEm || 0} prova(s)</dd></div>
+      <div><dt>Cadastrada em</dt><dd>${questao.criadoEm ? new Date(questao.criadoEm).toLocaleDateString('pt-BR') : '—'}</dd></div>
+    </dl>
+
+    <div class="detalhe-acoes">
+      <button type="button" class="btn-escuro" id="btnAlternarProva">
+        ${selecionada ? 'Remover da prova atual' : 'Adicionar à prova atual'}
+      </button>
+      <button type="button" class="btn-secundario" id="btnIrMontagem">
+        Montar prova (${Estado.selecionadas.length})
+      </button>
+    </div>
+    <div class="status" id="statusDetalhe"></div>
+  `;
+
+  document.getElementById('btnAlternarProva').addEventListener('click', () => {
+    alternarSelecao(questao.id);
+    renderizarBanco();
+  });
+  document.getElementById('btnIrMontagem').addEventListener('click', () => mostrarView('montar'));
+  document.getElementById('btnEditarQuestao').addEventListener('click', () => {
+    Estado.editando = true;
+    renderizarDetalhe();
+  });
+  document.getElementById('btnRemoverQuestao').addEventListener('click', () => confirmarRemocao(questao));
+}
+
+function renderizarFormularioEdicao(questao) {
+  painelDetalheEl.innerHTML = `
+    <div class="detalhe-topo">
+      <div class="detalhe-identificacao">
+        <span class="codigo">${escapeHtml(questao.codigo)}</span>
+        <span class="etiqueta">Editando</span>
+      </div>
+    </div>
+
+    <label class="campo">Enunciado (e alternativas, uma por linha)
+      <textarea id="edicaoTexto" rows="8">${escapeHtml(questao.texto || '')}</textarea>
+    </label>
+
+    <div class="campos-lado-a-lado">
+      <label class="campo">Assunto
+        <input type="text" id="edicaoAssunto" list="assuntosConhecidos" value="${escapeHtml(questao.assunto)}">
+      </label>
+      <label class="campo">Valor (pts)
+        <input type="number" id="edicaoValor" min="0.5" max="100" step="0.5" value="${Number(questao.valor) || 1}">
+      </label>
+    </div>
+
+    <div class="campos-lado-a-lado">
+      <label class="campo">Período
+        <select id="edicaoPeriodo">
+          <option value="atual" ${questao.periodo !== 'historico' ? 'selected' : ''}>Período atual</option>
+          <option value="historico" ${questao.periodo === 'historico' ? 'selected' : ''}>Histórico</option>
+        </select>
+      </label>
+      <label class="campo">Ano (histórico)
+        <input type="number" id="edicaoAno" min="1990" max="2100" value="${questao.ano || ''}" placeholder="2024">
+      </label>
+    </div>
+
+    <div class="detalhe-acoes">
+      <button type="button" class="btn-escuro" id="btnSalvarEdicao">Salvar alterações</button>
+      <button type="button" class="btn-secundario" id="btnCancelarEdicao">Cancelar</button>
+    </div>
+    <div class="status" id="statusDetalhe"></div>
+  `;
+
+  const statusEl = document.getElementById('statusDetalhe');
+
+  document.getElementById('btnCancelarEdicao').addEventListener('click', () => {
+    Estado.editando = false;
+    renderizarDetalhe();
+  });
+
+  document.getElementById('btnSalvarEdicao').addEventListener('click', async (evento) => {
+    const texto = document.getElementById('edicaoTexto').value.trim();
+    if (!texto) {
+      statusEl.textContent = 'O enunciado não pode ficar vazio.';
+      statusEl.className = 'status erro';
+      return;
+    }
+    evento.target.disabled = true;
+    statusEl.textContent = 'Salvando...';
+    statusEl.className = 'status';
+    try {
+      await pedirJson(`/api/questoes/${encodeURIComponent(questao.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texto,
+          assunto: document.getElementById('edicaoAssunto').value,
+          valor: document.getElementById('edicaoValor').value,
+          periodo: document.getElementById('edicaoPeriodo').value,
+          ano: document.getElementById('edicaoAno').value,
+        }),
+      });
+      Estado.editando = false;
+      await carregarQuestoes();
+    } catch (err) {
+      evento.target.disabled = false;
+      statusEl.textContent = err.message;
+      statusEl.className = 'status erro';
+    }
+  });
+}
+
+function confirmarRemocao(questao) {
+  const statusEl = document.getElementById('statusDetalhe');
+  statusEl.className = 'status';
+  statusEl.innerHTML = `
+    <div class="confirmacao-exclusao">
+      <span>Excluir esta questão permanentemente?</span>
+      <button type="button" class="confirmar-exclusao">Confirmar</button>
+      <button type="button" class="cancelar-exclusao">Cancelar</button>
+    </div>
+  `;
+
+  statusEl.querySelector('.cancelar-exclusao').addEventListener('click', () => {
+    statusEl.innerHTML = '';
+  });
+  statusEl.querySelector('.confirmar-exclusao').addEventListener('click', async (evento) => {
+    evento.target.disabled = true;
+    try {
+      await pedirJson(`/api/questoes/${encodeURIComponent(questao.id)}`, { method: 'DELETE' });
+      // Some da prova em montagem também, senão o PDF quebraria depois.
+      const posicao = Estado.selecionadas.indexOf(questao.id);
+      if (posicao >= 0) {
+        Estado.selecionadas.splice(posicao, 1);
+        salvarSelecao();
+      }
+      Estado.detalheId = null;
+      await carregarQuestoes();
+    } catch (err) {
+      evento.target.disabled = false;
+      statusEl.innerHTML = `<span class="erro">${escapeHtml(err.message)}</span>`;
+    }
+  });
+}
+
+function renderizarBanco() {
+  renderizarFiltros();
+  renderizarLista();
+  renderizarDetalhe();
+  window.MontagemProva?.renderizarMontagem();
+}
+
+async function carregarQuestoes() {
+  resumoListaEl.textContent = 'Carregando…';
+  try {
+    const dados = await pedirJson('/api/questoes?limite=100');
+    // "Q1, Q2, Q3..." é a posição da questão no banco — serve de código
+    // curto para o professor se referir a ela nas telas.
+    Estado.questoes = (dados.questoes || []).map((questao, indice) => ({
+      ...questao,
+      codigo: `Q${indice + 1}`,
+    }));
+
+    // Limpa da seleção o que não existe mais no banco.
+    const idsValidos = new Set(Estado.questoes.map((questao) => questao.id));
+    const antes = Estado.selecionadas.length;
+    Estado.selecionadas = Estado.selecionadas.filter((id) => idsValidos.has(id));
+    if (Estado.selecionadas.length !== antes) salvarSelecao();
+
+    renderizarBanco();
+  } catch (err) {
+    listaQuestoesEl.innerHTML = '';
+    resumoListaEl.innerHTML = `<span class="erro">${escapeHtml(err.message)}</span>`;
+    painelDetalheEl.innerHTML = '<div class="detalhe-vazio">Não foi possível carregar o banco de questões.</div>';
+  }
+}
+
+buscaPalavraChaveEl.addEventListener('input', () => {
+  Estado.filtro.palavraChave = buscaPalavraChaveEl.value.trim().toLowerCase();
+  renderizarLista();
+  renderizarDetalhe();
+});
+buscaAssuntoEl.addEventListener('input', () => {
+  Estado.filtro.assunto_busca = buscaAssuntoEl.value.trim().toLowerCase();
+  renderizarLista();
+  renderizarDetalhe();
+});
+
+/* ------------------------------------------- Drawer "Adicionar questão" */
+
+const drawerEl = document.getElementById('drawer');
+const drawerOverlayEl = document.getElementById('drawerOverlay');
+
+function abrirDrawer() {
+  drawerEl.classList.remove('oculto');
+  drawerOverlayEl.classList.remove('oculto');
+}
+function fecharDrawer() {
+  drawerEl.classList.add('oculto');
+  drawerOverlayEl.classList.add('oculto');
+}
+document.getElementById('btnAbrirDrawer').addEventListener('click', abrirDrawer);
+document.getElementById('btnNovaQuestao').addEventListener('click', abrirDrawer);
+document.getElementById('btnFecharDrawer').addEventListener('click', fecharDrawer);
+drawerOverlayEl.addEventListener('click', fecharDrawer);
+
+document.querySelectorAll('.drawer-tab').forEach((botaoAba) => {
+  botaoAba.addEventListener('click', () => {
+    document.querySelectorAll('.drawer-tab').forEach((b) => b.classList.remove('ativo'));
+    botaoAba.classList.add('ativo');
+    const abaAlvo = botaoAba.dataset.tab;
+    document.querySelectorAll('.drawer-painel').forEach((painel) => {
+      painel.classList.toggle('oculto', painel.dataset.painel !== abaAlvo);
+    });
+  });
+});
+
+const btnPdf = document.getElementById('btnPdf');
+const btnDocx = document.getElementById('btnDocx');
+const btnImagem = document.getElementById('btnImagem');
+const dropArea = document.getElementById('dropArea');
+const inputArquivo = document.getElementById('inputArquivo');
+const btnTirarFoto = document.getElementById('btnTirarFoto');
+const inputFoto = document.getElementById('inputFoto');
+const nomeArquivoEl = document.getElementById('nomeArquivo');
+const tipoAceitoEl = document.getElementById('tipoAceito');
+const btnEnviar = document.getElementById('btnEnviar');
+const statusEl = document.getElementById('status');
+const cardResultado = document.getElementById('cardResultado');
+const metaEl = document.getElementById('meta');
+const textoEl = document.getElementById('textoExtraido');
+const btnCopiar = document.getElementById('btnCopiar');
+const statusIdentificacaoEl = document.getElementById('statusIdentificacao');
+const listaQuestoesIdentificadasEl = document.getElementById('listaQuestoesIdentificadas');
+
+let tipo = 'pdf'; // 'pdf' | 'docx' | 'imagem'
+let arquivoSelecionado = null;
+
+function definirTipo(novoTipo) {
+  tipo = novoTipo;
+  const ehPdf = tipo === 'pdf';
+  const ehDocx = tipo === 'docx';
+  const ehImagem = tipo === 'imagem';
+  btnPdf.classList.toggle('ativo', ehPdf);
+  btnDocx.classList.toggle('ativo', ehDocx);
+  btnImagem.classList.toggle('ativo', ehImagem);
+  inputArquivo.accept = ehPdf ? '.pdf' : ehDocx ? '.docx' : 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff';
+  tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : ehDocx ? 'Aceita: .docx' : 'Aceita: JPG, PNG, WEBP, GIF, BMP ou TIFF';
+  dropArea.querySelector('p strong').textContent = ehImagem ? 'Clique para escolher da galeria' : 'Clique para escolher';
+  btnTirarFoto.classList.toggle('oculto', !ehImagem);
+  limparSelecao();
+}
+
+function limparSelecao() {
+  arquivoSelecionado = null;
+  nomeArquivoEl.textContent = '';
+  btnEnviar.disabled = true;
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+}
+
+function selecionarArquivo(arquivo) {
+  const extensoesImagem = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff'];
+  const extensaoEsperada = tipo === 'pdf' ? '.pdf' : '.docx';
+  const valido = tipo === 'imagem'
+    ? extensoesImagem.some((ext) => arquivo.name.toLowerCase().endsWith(ext))
+    : arquivo.name.toLowerCase().endsWith(extensaoEsperada);
+  if (!valido) {
+    statusEl.textContent = tipo === 'imagem'
+      ? 'Selecione uma imagem JPG, PNG, WEBP, GIF, BMP ou TIFF.'
+      : `Selecione um arquivo ${extensaoEsperada}.`;
+    statusEl.className = 'status erro';
+    return;
+  }
+  arquivoSelecionado = arquivo;
+  nomeArquivoEl.textContent = arquivo.name;
+  btnEnviar.disabled = false;
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+}
+
+btnPdf.addEventListener('click', () => definirTipo('pdf'));
+btnDocx.addEventListener('click', () => definirTipo('docx'));
+btnImagem.addEventListener('click', () => definirTipo('imagem'));
+
+dropArea.addEventListener('click', () => inputArquivo.click());
+inputArquivo.addEventListener('change', (e) => {
+  if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
+});
+
+// No celular, o atributo capture="environment" faz o navegador abrir a
+// câmera traseira direto, em vez de mostrar a galeria — é isso que separa
+// "tirar uma foto agora" de "escolher um arquivo já existente".
+btnTirarFoto.addEventListener('click', () => inputFoto.click());
+inputFoto.addEventListener('change', (e) => {
+  if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
+});
+
+['dragenter', 'dragover'].forEach((evento) => {
+  dropArea.addEventListener(evento, (e) => {
+    e.preventDefault();
+    dropArea.classList.add('arrastando');
+  });
+});
+['dragleave', 'drop'].forEach((evento) => {
+  dropArea.addEventListener(evento, (e) => {
+    e.preventDefault();
+    dropArea.classList.remove('arrastando');
+  });
+});
+dropArea.addEventListener('drop', (e) => {
+  const arquivo = e.dataTransfer.files[0];
+  if (arquivo) selecionarArquivo(arquivo);
+});
+
+btnEnviar.addEventListener('click', async () => {
+  if (!arquivoSelecionado) return;
+
+  btnEnviar.disabled = true;
+  statusEl.textContent = tipo === 'imagem' ? 'Lendo imagem com OCR (a primeira pode demorar mais)...' : 'Extraindo...';
+  statusEl.className = 'status';
+  cardResultado.classList.add('oculto');
+
+  const formData = new FormData();
+  formData.append('arquivo', arquivoSelecionado);
+
+  const endpoint = tipo === 'pdf'
+    ? '/api/questoes/extrair-pdf'
+    : tipo === 'docx' ? '/api/questoes/extrair-docx' : '/api/questoes/extrair-imagem';
+
+  try {
+    const resposta = await fetch(API_BASE + endpoint, { method: 'POST', body: formData });
+    const conteudo = await resposta.text();
+    let dados;
+    try {
+      dados = JSON.parse(conteudo);
+    } catch (_) {
+      throw new Error(
+        resposta.status >= 500
+          ? `O servidor retornou um erro ${resposta.status}. Confira os logs. Detalhe: ${conteudo.slice(0, 180)}`
+          : conteudo.slice(0, 180) || 'Resposta inválida do servidor.'
+      );
+    }
+
+    if (!resposta.ok) throw new Error(dados.erro || 'Erro ao extrair o texto.');
+
+    statusEl.textContent = 'Extração concluída.';
+    statusEl.className = 'status ok';
+
+    const partesMeta = [`Arquivo: ${dados.nomeArquivo}`];
+    if (typeof dados.paginas === 'number') partesMeta.push(`${dados.paginas} página(s)`);
+    if (dados.avisos && dados.avisos.length) partesMeta.push(`${dados.avisos.length} aviso(s) de conversão`);
+    if (typeof dados.confianca === 'number') partesMeta.push(`confiança OCR: ${dados.confianca}%`);
+    metaEl.textContent = partesMeta.join(' · ');
+
+    textoEl.value = dados.texto || '(nenhum texto encontrado)';
+    cardResultado.classList.remove('oculto');
+
+    await identificarErenderizarQuestoes(
+      dados.texto || '', tipo, arquivoSelecionado?.name || null,
+      listaQuestoesIdentificadasEl, statusIdentificacaoEl,
+    );
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'status erro';
+  } finally {
+    btnEnviar.disabled = false;
+  }
+});
+
+btnCopiar.addEventListener('click', () => {
+  textoEl.select();
+  document.execCommand('copy');
+  btnCopiar.textContent = 'Copiado';
+  setTimeout(() => (btnCopiar.textContent = 'Copiar texto bruto'), 1500);
+});
+
+// Monta o texto final de uma questão (enunciado + alternativas, se houver)
+// a partir do que foi identificado automaticamente.
+function montarTextoQuestao(questao) {
+  const partes = [questao.enunciado];
+  if (questao.alternativas && questao.alternativas.length) {
+    partes.push('', ...questao.alternativas);
+  }
+  return partes.join('\n').trim();
+}
+
+async function salvarQuestaoNoFirebase(dados) {
+  return pedirJson('/api/questoes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  });
+}
+
+// Chama o motor de identificação de questões (regras, roda no servidor,
+// sem custo) e desenha um card editável para cada questão encontrada, já
+// sem cabeçalho/instruções/rodapé. O professor confere, classifica
+// (assunto, período e valor em pontos) e salva cada uma individualmente.
+async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquivo, containerEl, statusAlvoEl) {
+  containerEl.innerHTML = '';
+  if (!textoBruto.trim()) {
+    statusAlvoEl.textContent = '';
+    return;
+  }
+
+  statusAlvoEl.textContent = 'Identificando questões...';
+  statusAlvoEl.className = 'status';
+
+  let questoes = [];
+  let correcaoAplicada = true;
+  try {
+    const dados = await pedirJson('/api/questoes/identificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texto: textoBruto }),
+    });
+    questoes = dados.questoes || [];
+    correcaoAplicada = dados.correcaoAplicada !== false;
+  } catch (err) {
+    statusAlvoEl.textContent = `Não foi possível identificar automaticamente: ${err.message}`;
+    statusAlvoEl.className = 'status erro';
+    return;
+  }
+
+  if (questoes.length === 0) {
+    statusAlvoEl.textContent = '';
+    containerEl.innerHTML = `
+      <div class="aviso-identificacao">
+        Nenhuma questão foi reconhecida automaticamente nesse texto (pode ter sobrado só
+        cabeçalho/instrução, ou o formato fugiu do padrão). Revise o texto original e tente
+        reformular com uma numeração mais clara (ex.: "1.", "2)"), se for o caso.
+      </div>`;
+    return;
+  }
+
+  statusAlvoEl.textContent = `${questoes.length} questão(ões) identificada(s). Confira cada uma antes de salvar.`;
+  statusAlvoEl.className = 'status ok';
+  if (!correcaoAplicada) {
+    statusAlvoEl.textContent += ' (correção automática de português indisponível no momento — revise com atenção.)';
+  }
+
+  questoes.forEach((questao) => {
+    const item = document.createElement('div');
+    item.className = 'questao-candidata';
+    item.innerHTML = `
+      <div class="questao-candidata-cabecalho">
+        <strong>Questão ${questao.numero}</strong>
+        <span class="badge">${questao.alternativas && questao.alternativas.length ? 'múltipla escolha' : 'dissertativa'}</span>
+      </div>
+      <textarea class="texto-questao-candidata">${escapeHtml(montarTextoQuestao(questao))}</textarea>
+      <div class="classificacao">
+        <label class="campo">Assunto
+          <input type="text" class="campo-assunto" list="assuntosConhecidos" placeholder="Ex.: Padrões de Projeto">
+        </label>
+        <label class="campo">Valor (pts)
+          <input type="number" class="campo-valor" min="0.5" max="100" step="0.5" value="1">
+        </label>
+        <label class="campo">Período
+          <select class="campo-periodo">
+            <option value="atual">Período atual</option>
+            <option value="historico">Histórico</option>
+          </select>
+        </label>
+        <label class="campo">Ano
+          <input type="number" class="campo-ano" min="1990" max="2100" placeholder="2024">
+        </label>
+      </div>
+      <div class="acoes">
+        <button class="salvar btn-salvar-candidata">Salvar questão</button>
+        <button class="verificar btn-verificar-candidata" type="button">Verificar conteúdo com IA</button>
+        <button class="corrigir btn-corrigir-ia-candidata" type="button">Corrigir com IA</button>
+        <button class="excluir btn-descartar-candidata">Descartar</button>
+      </div>
+      <div class="status-inline"></div>
+      <div class="verificacao-conteudo oculto"></div>
+    `;
+    containerEl.appendChild(item);
+
+    const textareaEl = item.querySelector('.texto-questao-candidata');
+    const avisoEl = item.querySelector('.status-inline');
+
+    item.querySelector('.btn-descartar-candidata').addEventListener('click', () => item.remove());
+
+    item.querySelector('.btn-verificar-candidata').addEventListener('click', async (evento) => {
+      const botao = evento.target;
+      const caixaVerificacao = item.querySelector('.verificacao-conteudo');
+      botao.disabled = true;
+      botao.textContent = 'Verificando...';
+      caixaVerificacao.classList.remove('oculto');
+      caixaVerificacao.className = 'verificacao-conteudo';
+      caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+      try {
+        // Usa o texto atual do textarea (o professor pode já ter editado).
+        // Separa linhas de alternativa (A), B) etc.) do resto, mas MANTÉM
+        // todas as outras linhas juntas no enunciado — dissertativas longas
+        // podem ocupar várias linhas.
+        const linhas = textareaEl.value.split('\n');
+        const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+        const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
+        const dados = await pedirJson('/api/questoes/verificar-conteudo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+        });
+        if (!dados.disponivel) {
+          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+          caixaVerificacao.textContent = dados.motivo || 'Verificação indisponível no momento.';
+        } else if (dados.coerente) {
+          caixaVerificacao.className = 'verificacao-conteudo ok';
+          caixaVerificacao.textContent = `O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
+        } else {
+          caixaVerificacao.className = 'verificacao-conteudo alerta';
+          caixaVerificacao.textContent = `Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
+        }
+      } catch (err) {
+        caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+        caixaVerificacao.textContent = err.message;
+      } finally {
+        botao.disabled = false;
+        botao.textContent = 'Verificar conteúdo com IA';
+      }
+    });
+
+    item.querySelector('.btn-corrigir-ia-candidata').addEventListener('click', async (evento) => {
+      const botao = evento.target;
+      const caixaVerificacao = item.querySelector('.verificacao-conteudo');
+      botao.disabled = true;
+      botao.textContent = 'Corrigindo...';
+      caixaVerificacao.classList.remove('oculto');
+      caixaVerificacao.className = 'verificacao-conteudo';
+      caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+      try {
+        const linhas = textareaEl.value.split('\n');
+        const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
+        const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
+        const dados = await pedirJson('/api/questoes/corrigir-com-ia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+        });
+        if (!dados.disponivel) {
+          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+          caixaVerificacao.textContent = dados.motivo || 'Correção indisponível no momento.';
+        } else {
+          // Só atualiza o textarea — o professor decide se salva depois de
+          // revisar. Nada é salvo automaticamente.
+          const partes = [dados.enunciado];
+          if (dados.alternativas && dados.alternativas.length) partes.push('', ...dados.alternativas);
+          textareaEl.value = partes.join('\n').trim();
+          const possivelPerdaDeConteudo = (dados.observacao || '').toLowerCase().startsWith('[atenção]');
+          const observacaoLimpa = (dados.observacao || '').replace(/^\[atenção\]\s*/i, '');
+          caixaVerificacao.className = possivelPerdaDeConteudo
+            ? 'verificacao-conteudo alerta'
+            : 'verificacao-conteudo ok';
+          caixaVerificacao.textContent = observacaoLimpa
+            ? `${possivelPerdaDeConteudo ? '' : 'Corrigido: '}${observacaoLimpa} Revise antes de salvar.`
+            : 'A IA não encontrou nada pra corrigir aqui.';
+        }
+      } catch (err) {
+        caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+        caixaVerificacao.textContent = err.message;
+      } finally {
+        botao.disabled = false;
+        botao.textContent = 'Corrigir com IA';
+      }
+    });
+
+    item.querySelector('.btn-salvar-candidata').addEventListener('click', async (evento) => {
+      if (!textareaEl.value.trim()) {
+        avisoEl.className = 'status-inline erro';
+        avisoEl.textContent = 'A questão não pode ficar vazia.';
+        return;
+      }
+      const botao = evento.target;
+      botao.disabled = true;
+      item.querySelector('.btn-descartar-candidata').disabled = true;
+      avisoEl.className = 'status-inline';
+      avisoEl.textContent = 'Salvando no Firebase...';
+      try {
+        await salvarQuestaoNoFirebase({
+          texto: textareaEl.value,
+          tipoOrigem,
+          nomeArquivo,
+          assunto: item.querySelector('.campo-assunto').value,
+          valor: item.querySelector('.campo-valor').value,
+          periodo: item.querySelector('.campo-periodo').value,
+          ano: item.querySelector('.campo-ano').value,
+        });
+        item.classList.add('salva');
+        avisoEl.className = 'status-inline';
+        avisoEl.textContent = 'Salva com sucesso.';
+        textareaEl.readOnly = true;
+        botao.textContent = 'Salva';
+        item.querySelector('.btn-descartar-candidata').classList.add('oculto');
+        carregarQuestoes();
+      } catch (err) {
+        avisoEl.className = 'status-inline erro';
+        avisoEl.textContent = err.message;
+        botao.disabled = false;
+        item.querySelector('.btn-descartar-candidata').disabled = false;
+      }
+    });
+  });
+}
+
+/* ------------------------------------------------------ aba Texto e E-mail */
+
+const editorQuestao = document.getElementById('editorQuestao');
+const statusEditadaEl = document.getElementById('statusEditada');
+const listaQuestoesIdentificadasManualEl = document.getElementById('listaQuestoesIdentificadasManual');
+
+document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
+  const texto = editorQuestao.innerText.trim();
+  if (!texto) {
+    statusEditadaEl.textContent = 'Escreva ou cole um texto antes de identificar.';
+    statusEditadaEl.className = 'status erro';
+    return;
+  }
+  const botao = document.getElementById('btnSalvarEditada');
+  botao.disabled = true;
+  try {
+    await identificarErenderizarQuestoes(
+      texto, 'manual', 'questao-escrita',
+      listaQuestoesIdentificadasManualEl, statusEditadaEl,
+    );
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+const btnVerificarEmail = document.getElementById('btnVerificarEmail');
+const statusEmailEl = document.getElementById('statusEmail');
+const listaEmailsEl = document.getElementById('listaEmails');
+
+function mostrarErroNoCard(elemento, mensagem) {
+  const card = elemento.closest('.email-item');
+  if (!card) return;
+  let aviso = card.querySelector('.status-inline');
+  if (!aviso) {
+    aviso = document.createElement('div');
+    aviso.className = 'status-inline erro';
+    card.appendChild(aviso);
+  }
+  aviso.textContent = mensagem;
+}
+
+btnVerificarEmail.addEventListener('click', async () => {
+  btnVerificarEmail.disabled = true;
+  statusEmailEl.textContent = 'Verificando caixa de entrada...';
+  statusEmailEl.className = 'status';
+  listaEmailsEl.innerHTML = '';
+
+  try {
+    const dados = await pedirJson('/api/questoes/verificar-email', { method: 'POST' });
+
+    statusEmailEl.textContent = `${dados.quantidade} e-mail(s) novo(s) processado(s).`;
+    statusEmailEl.className = 'status ok';
+
+    dados.emails.forEach((email) => {
+      const anexosHtml = (email.anexos || []).map((anexo, indice) => `
+        <div class="anexo">
+          <div class="anexo-nome">${escapeHtml(anexo.nomeArquivo || 'anexo')}</div>
+          <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || '').slice(0, 500))}</div>
+          ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-anexo="${indice}">Identificar questões do anexo</button>` : ''}
+        </div>
+      `).join('');
+
+      const item = document.createElement('div');
+      item.className = 'email-item';
+      item.innerHTML = `
+        <div class="assunto">${escapeHtml(email.assunto || '(sem assunto)')}</div>
+        <div class="remetente">${escapeHtml(email.de || '')}</div>
+        <div class="corpo">${escapeHtml(email.textoCorpo || '(corpo vazio)')}</div>
+        ${email.textoCorpo ? '<button class="salvar salvar-email-corpo">Identificar questões do corpo</button>' : ''}
+        <button class="excluir remover-email">Remover da tela</button>
+        ${anexosHtml}
+        <div class="status status-email-item"></div>
+        <div class="candidatas-email"></div>
+      `;
+      listaEmailsEl.appendChild(item);
+
+      const containerCandidatas = item.querySelector('.candidatas-email');
+      const statusItemEl = item.querySelector('.status-email-item');
+
+      item.querySelector('.remover-email').addEventListener('click', () => item.remove());
+      item.querySelector('.salvar-email-corpo')?.addEventListener('click', async (evento) => {
+        evento.target.disabled = true;
+        try {
+          await identificarErenderizarQuestoes(
+            email.textoCorpo, 'email', email.assunto || 'email', containerCandidatas, statusItemEl,
+          );
+        } catch (err) {
+          mostrarErroNoCard(evento.target, err.message);
+        } finally {
+          evento.target.disabled = false;
+        }
+      });
+      item.querySelectorAll('.salvar-email-anexo').forEach((botao) => botao.addEventListener('click', async (evento) => {
+        evento.target.disabled = true;
+        const anexo = email.anexos[Number(evento.target.dataset.anexo)];
+        try {
+          await identificarErenderizarQuestoes(
+            anexo.texto, anexo.tipo || 'email-anexo', anexo.nomeArquivo || 'anexo',
+            containerCandidatas, statusItemEl,
+          );
+        } catch (err) {
+          mostrarErroNoCard(evento.target, err.message);
+        } finally {
+          evento.target.disabled = false;
+        }
+      }));
+    });
+  } catch (err) {
+    statusEmailEl.textContent = err.message;
+    statusEmailEl.className = 'status erro';
+  } finally {
+    btnVerificarEmail.disabled = false;
+  }
+});
+
+/* ------------------------------------------------------------- inicialização */
+
+Estado.selecionadas = lerSelecaoSalva();
+
+// Superfície usada por montarProva.js.
+window.App = {
+  Estado,
+  API_BASE,
+  escapeHtml,
+  formatarPontos,
+  textoLimpo,
+  resumir,
+  rotuloPeriodo,
+  estaSelecionada,
+  alternarSelecao,
+  salvarSelecao,
+  questaoPorId,
+  questoesSelecionadas,
+  pontuacaoSelecionada,
+  pedirJson,
+  mostrarView,
+  carregarQuestoes,
+  renderizarBanco,
+  abrirDrawer,
+};
+
+carregarQuestoes();

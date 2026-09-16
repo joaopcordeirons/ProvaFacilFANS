@@ -13,7 +13,15 @@ const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
 const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
-const { criarQuestao, listarQuestoes, excluirQuestao } = require('./firebase');
+const {
+  criarQuestao,
+  listarQuestoes,
+  atualizarQuestao,
+  excluirQuestao,
+  buscarQuestoesPorIds,
+  registrarUsoQuestoes,
+} = require('./firebase');
+const { montarPdfProva } = require('./provaPdf');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -82,13 +90,17 @@ app.get('/api/status', (req, res) => {
 // Salva o texto revisado pelo professor no Cloud Firestore.
 app.post('/api/questoes', express.json(), async (req, res) => {
   try {
-    const { texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos } = req.body || {};
+    const {
+      texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+      assunto, periodo, ano, valor,
+    } = req.body || {};
     if (typeof texto !== 'string' || !texto.trim()) {
       return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
     }
 
     const questao = await criarQuestao({
       texto: texto.trim(), conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+      assunto, periodo, ano, valor,
     });
     return res.status(201).json(questao);
   } catch (err) {
@@ -158,6 +170,57 @@ app.post('/api/questoes/corrigir-com-ia', express.json({ limit: '1mb' }), async 
   } catch (err) {
     console.error('Erro ao corrigir com IA:', err.message);
     return res.status(500).json({ erro: 'Falha ao corrigir com IA.', detalhe: err.message });
+  }
+});
+
+// Edição de uma questão já salva (painel de detalhe do Banco de Questões):
+// enunciado, assunto, período/ano e valor em pontos.
+app.put('/api/questoes/:id', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { texto, conteudoHtml, assunto, periodo, ano, valor } = req.body || {};
+    if (texto !== undefined && (typeof texto !== 'string' || !texto.trim())) {
+      return res.status(400).json({ erro: 'O campo "texto" não pode ficar vazio.' });
+    }
+    return res.json(await atualizarQuestao(req.params.id, {
+      texto, conteudoHtml, assunto, periodo, ano, valor,
+    }));
+  } catch (err) {
+    console.error('Erro ao atualizar questão:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Monta o PDF da prova com as questões selecionadas e devolve o arquivo
+// para download. As questões vêm do Firestore (o navegador manda só os
+// IDs e a ordem), e cada uma tem seu contador "usada em N provas"
+// incrementado depois que o PDF é gerado com sucesso.
+app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const { questaoIds, titulo, instituicao, disciplina, professor, turma, data, instrucoes, linhasResposta } = req.body || {};
+
+    if (!Array.isArray(questaoIds) || questaoIds.length === 0) {
+      return res.status(400).json({ erro: 'Selecione pelo menos uma questão para montar a prova.' });
+    }
+    if (questaoIds.length > 60) {
+      return res.status(400).json({ erro: 'Uma prova pode ter no máximo 60 questões.' });
+    }
+
+    const questoes = await buscarQuestoesPorIds(questaoIds);
+    const pdf = await montarPdfProva({
+      titulo, instituicao, disciplina, professor, turma, data, instrucoes, linhasResposta,
+      questoes: questoes.map((questao) => ({ texto: questao.texto, valor: questao.valor })),
+    });
+
+    await registrarUsoQuestoes(questoes.map((questao) => questao.id));
+
+    const nomeArquivo = `${(titulo || 'prova').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'prova'}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo}"`);
+    res.setHeader('Content-Length', pdf.length);
+    return res.end(pdf);
+  } catch (err) {
+    console.error('Erro ao gerar o PDF da prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao gerar o PDF da prova.' });
   }
 });
 

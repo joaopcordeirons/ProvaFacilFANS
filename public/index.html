@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ProvaFácil FANS — Testar Extração de Texto</title>
+<title>ProvaFácil FANS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,21 +13,21 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="logo">
-        <span class="logo-mark">P</span>
+        <span class="logo-mark">PF</span>
         <span class="logo-nome">ProvaFácil</span>
       </div>
       <nav class="sidebar-nav">
-        <button type="button" class="nav-item ativo" data-view="banco">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="13" height="13" rx="1.5"/><path d="M1.5 6h13"/></svg>
+        <button type="button" class="nav-item" data-ir-para="banco">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 7.2 8 2l6 5.2V14H2z"/></svg>
           Início
         </button>
-        <button type="button" class="nav-item ativo" data-view="banco">
+        <button type="button" class="nav-item ativo" data-ir-para="banco">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3l1.5 2H13a1.5 1.5 0 0 1 1.5 1.5V11A1.5 1.5 0 0 1 13 12.5H3A1.5 1.5 0 0 1 1.5 11z"/></svg>
           Banco de Questões
         </button>
-        <button type="button" class="nav-item" disabled title="Ainda não implementado">
+        <button type="button" class="nav-item" data-ir-para="montar">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="1.5" width="11" height="13" rx="1.2"/><path d="M5 5h6M5 8h6M5 11h3.5"/></svg>
-          Minhas Provas
+          Montar prova
         </button>
         <button type="button" class="nav-item" disabled title="Ainda não implementado">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.2" r="2.7"/><path d="M2.5 14c0-2.8 2.5-4.7 5.5-4.7s5.5 1.9 5.5 4.7"/></svg>
@@ -35,34 +35,134 @@
         </button>
       </nav>
       <div class="sidebar-footer">
-        <div class="avatar">P</div>
+        <div class="avatar">CE</div>
         <div>
-          <div class="conta-nome">Professor</div>
-          <div class="conta-legenda">conta de testes</div>
+          <div class="conta-nome">Carlos Eduardo</div>
+          <div class="conta-legenda">Professor · Eng. Software</div>
         </div>
       </div>
     </aside>
 
-    <main class="main">
+    <!-- ===================== TELA 03 · BANCO DE QUESTÕES ===================== -->
+    <main class="main main-larga" id="viewBanco">
       <header class="main-header">
         <h1>Banco de Questões</h1>
-        <button type="button" class="btn-primary" id="btnAbrirDrawer">Adicionar questão</button>
+        <div class="header-acoes">
+          <label class="campo-busca">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+            <input type="search" id="buscaAssunto" placeholder="Buscar por assunto">
+          </label>
+          <button type="button" class="btn-primary" id="btnAbrirDrawer">Adicionar questão</button>
+        </div>
       </header>
 
-      <div class="panel">
-        <div class="tabela-cabecalho">
-          <div class="status" id="statusQuestoes" style="margin:0;"></div>
-          <button type="button" class="link-acao" id="btnCarregarQuestoes">Atualizar lista</button>
-        </div>
-        <table class="tabela-questoes">
-          <thead>
-            <tr><th>Cód.</th><th>Enunciado</th><th>Origem</th><th>Data</th><th></th></tr>
-          </thead>
-          <tbody id="listaQuestoes"></tbody>
-        </table>
+      <div class="mestre-detalhe">
+        <!-- Painel 1: filtros -->
+        <section class="painel-filtros">
+          <div class="disciplina-atual">Engenharia de Software</div>
+
+          <div class="filtro-grupo">
+            <div class="filtro-rotulo">Período</div>
+            <div id="filtrosPeriodo"></div>
+          </div>
+
+          <div class="filtro-grupo">
+            <div class="filtro-rotulo">Assunto</div>
+            <div id="filtrosAssunto"></div>
+          </div>
+
+          <button type="button" class="btn-escuro" id="btnNovaQuestao">+ Nova questão</button>
+        </section>
+
+        <!-- Painel 2: lista -->
+        <section class="painel-lista">
+          <label class="campo-busca busca-lista">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+            <input type="search" id="buscaPalavraChave" placeholder="Buscar por palavra-chave">
+          </label>
+          <div class="lista-resumo" id="resumoLista">Carregando…</div>
+          <div class="lista-questoes" id="listaQuestoes"></div>
+        </section>
+
+        <!-- Painel 3: detalhe -->
+        <section class="painel-detalhe" id="painelDetalhe"></section>
       </div>
     </main>
 
+    <!-- ===================== TELA 07 · MONTAR A PROVA ===================== -->
+    <main class="main main-larga oculto" id="viewMontar">
+      <header class="main-header passo">
+        <div>
+          <div class="passo-rotulo">Passo 2 de 3</div>
+          <h1>Montar a prova — <span id="tituloDisciplinaMontagem">Engenharia de Software</span></h1>
+        </div>
+      </header>
+
+      <div class="duas-colunas">
+        <section>
+          <div class="secao-titulo">
+            Questões disponíveis <span class="contador" id="contadorDisponiveis"></span>
+          </div>
+          <div class="lista-montagem" id="listaMontagem"></div>
+        </section>
+
+        <aside class="resumo-prova">
+          <div class="resumo-rotulo">Resumo da prova</div>
+          <dl class="resumo-linhas">
+            <div><dt>Questões selecionadas</dt><dd id="resumoSelecionadas">0</dd></div>
+            <div><dt>Período atual</dt><dd id="resumoAtuais">0 questões</dd></div>
+            <div><dt>Histórico</dt><dd id="resumoHistoricas">0 questões</dd></div>
+            <div><dt>Pontuação total</dt><dd id="resumoPontos">0,0 pts</dd></div>
+          </dl>
+          <div class="resumo-nota" id="resumoNota">0,0 / 10,0</div>
+          <div class="resumo-aviso" id="resumoAviso"></div>
+          <button type="button" class="btn-escuro largo" id="btnContinuarRevisao">Continuar para revisão →</button>
+          <button type="button" class="btn-tracejado" id="btnAdicionarMais">+ Adicionar mais questões</button>
+        </aside>
+      </div>
+    </main>
+
+    <!-- ===================== PASSO 3 · REVISÃO E GERAÇÃO DO PDF ===================== -->
+    <main class="main main-larga oculto" id="viewRevisao">
+      <header class="main-header passo">
+        <div>
+          <div class="passo-rotulo">Passo 3 de 3</div>
+          <h1>Revisão e geração do PDF</h1>
+        </div>
+        <button type="button" class="btn-secundario" id="btnVoltarMontagem">← Voltar para a seleção</button>
+      </header>
+
+      <div class="duas-colunas">
+        <section>
+          <div class="secao-titulo">Ordem das questões <span class="contador" id="contadorRevisao"></span></div>
+          <div class="lista-revisao" id="listaRevisao"></div>
+        </section>
+
+        <aside class="resumo-prova">
+          <div class="resumo-rotulo">Cabeçalho da prova</div>
+          <label class="campo">Título<input type="text" id="campoTitulo" value="Avaliação — Engenharia de Software"></label>
+          <label class="campo">Instituição<input type="text" id="campoInstituicao" value="FANS"></label>
+          <label class="campo">Disciplina<input type="text" id="campoDisciplina" value="Engenharia de Software"></label>
+          <label class="campo">Professor(a)<input type="text" id="campoProfessor" value="Carlos Eduardo"></label>
+          <label class="campo">Turma<input type="text" id="campoTurma" placeholder="5º período"></label>
+          <label class="campo">Data<input type="date" id="campoData"></label>
+          <label class="campo">Instruções<textarea id="campoInstrucoes" rows="3">Responda com caneta azul ou preta. Não é permitida consulta.</textarea></label>
+          <label class="campo">Linhas de resposta (dissertativas)
+            <input type="number" id="campoLinhas" min="0" max="20" value="5">
+          </label>
+          <button type="button" class="btn-escuro largo" id="btnGerarPdf">Gerar PDF da prova</button>
+          <div class="status" id="statusPdf"></div>
+          <a class="link-download oculto" id="linkPdf" download>Baixar o PDF novamente</a>
+        </aside>
+      </div>
+
+      <section class="panel oculto" id="painelPreviaPdf">
+        <div class="secao-titulo">Prévia do PDF gerado</div>
+        <iframe id="previaPdf" title="Prévia do PDF da prova"></iframe>
+      </section>
+    </main>
+
+    <!-- ===================== DRAWER: ADICIONAR QUESTÃO ===================== -->
     <div class="drawer-overlay oculto" id="drawerOverlay"></div>
     <aside class="drawer oculto" id="drawer">
       <div class="drawer-header">
@@ -143,614 +243,9 @@
     </aside>
   </div>
 
-<script>
-  const API_BASE = window.location.origin;
+  <datalist id="assuntosConhecidos"></datalist>
 
-  /* ---------- Drawer "Adicionar questão": abrir/fechar e trocar de aba ---------- */
-  const drawerEl = document.getElementById('drawer');
-  const drawerOverlayEl = document.getElementById('drawerOverlay');
-  const btnAbrirDrawer = document.getElementById('btnAbrirDrawer');
-  const btnFecharDrawer = document.getElementById('btnFecharDrawer');
-
-  function abrirDrawer() {
-    drawerEl.classList.remove('oculto');
-    drawerOverlayEl.classList.remove('oculto');
-  }
-  function fecharDrawer() {
-    drawerEl.classList.add('oculto');
-    drawerOverlayEl.classList.add('oculto');
-  }
-  btnAbrirDrawer.addEventListener('click', abrirDrawer);
-  btnFecharDrawer.addEventListener('click', fecharDrawer);
-  drawerOverlayEl.addEventListener('click', fecharDrawer);
-
-  document.querySelectorAll('.drawer-tab').forEach((botaoAba) => {
-    botaoAba.addEventListener('click', () => {
-      document.querySelectorAll('.drawer-tab').forEach((b) => b.classList.remove('ativo'));
-      botaoAba.classList.add('ativo');
-      const abaAlvo = botaoAba.dataset.tab;
-      document.querySelectorAll('.drawer-painel').forEach((painel) => {
-        painel.classList.toggle('oculto', painel.dataset.painel !== abaAlvo);
-      });
-    });
-  });
-
-  const btnPdf = document.getElementById('btnPdf');
-  const btnDocx = document.getElementById('btnDocx');
-  const btnImagem = document.getElementById('btnImagem');
-  const dropArea = document.getElementById('dropArea');
-  const inputArquivo = document.getElementById('inputArquivo');
-  const btnTirarFoto = document.getElementById('btnTirarFoto');
-  const inputFoto = document.getElementById('inputFoto');
-  const nomeArquivoEl = document.getElementById('nomeArquivo');
-  const tipoAceitoEl = document.getElementById('tipoAceito');
-  const btnEnviar = document.getElementById('btnEnviar');
-  const statusEl = document.getElementById('status');
-  const cardResultado = document.getElementById('cardResultado');
-  const metaEl = document.getElementById('meta');
-  const textoEl = document.getElementById('textoExtraido');
-  const btnCopiar = document.getElementById('btnCopiar');
-  const statusIdentificacaoEl = document.getElementById('statusIdentificacao');
-  const listaQuestoesIdentificadasEl = document.getElementById('listaQuestoesIdentificadas');
-
-  let tipo = 'pdf'; // 'pdf' | 'docx' | 'imagem'
-  let arquivoSelecionado = null;
-
-  function definirTipo(novoTipo) {
-    tipo = novoTipo;
-    const ehPdf = tipo === 'pdf';
-    const ehDocx = tipo === 'docx';
-    const ehImagem = tipo === 'imagem';
-    btnPdf.classList.toggle('ativo', ehPdf);
-    btnDocx.classList.toggle('ativo', ehDocx);
-    btnImagem.classList.toggle('ativo', ehImagem);
-    inputArquivo.accept = ehPdf ? '.pdf' : ehDocx ? '.docx' : 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff';
-    tipoAceitoEl.textContent = ehPdf ? 'Aceita: .pdf' : ehDocx ? 'Aceita: .docx' : 'Aceita: JPG, PNG, WEBP, GIF, BMP ou TIFF';
-    dropArea.querySelector('p strong').textContent = ehImagem ? 'Clique para escolher da galeria' : 'Clique para escolher';
-    btnTirarFoto.classList.toggle('oculto', !ehImagem);
-    limparSelecao();
-  }
-
-  function limparSelecao() {
-    arquivoSelecionado = null;
-    nomeArquivoEl.textContent = '';
-    btnEnviar.disabled = true;
-    statusEl.textContent = '';
-    statusEl.className = 'status';
-  }
-
-  function selecionarArquivo(arquivo) {
-    const extensoesImagem = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.tif', '.tiff'];
-    const extensaoEsperada = tipo === 'pdf' ? '.pdf' : '.docx';
-    const valido = tipo === 'imagem' ? extensoesImagem.some((ext) => arquivo.name.toLowerCase().endsWith(ext)) : arquivo.name.toLowerCase().endsWith(extensaoEsperada);
-    if (!valido) {
-      statusEl.textContent = tipo === 'imagem' ? 'Selecione uma imagem JPG, PNG, WEBP, GIF, BMP ou TIFF.' : `Selecione um arquivo ${extensaoEsperada}.`;
-      statusEl.className = 'status erro';
-      return;
-    }
-    arquivoSelecionado = arquivo;
-    nomeArquivoEl.textContent = arquivo.name;
-    btnEnviar.disabled = false;
-    statusEl.textContent = '';
-    statusEl.className = 'status';
-  }
-
-  btnPdf.addEventListener('click', () => definirTipo('pdf'));
-  btnDocx.addEventListener('click', () => definirTipo('docx'));
-  btnImagem.addEventListener('click', () => definirTipo('imagem'));
-
-  dropArea.addEventListener('click', () => inputArquivo.click());
-  inputArquivo.addEventListener('change', (e) => {
-    if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
-  });
-
-  // No celular, o atributo capture="environment" faz o navegador abrir a
-  // câmera traseira direto, em vez de mostrar a galeria — é isso que separa
-  // "tirar uma foto agora" de "escolher um arquivo já existente".
-  btnTirarFoto.addEventListener('click', () => inputFoto.click());
-  inputFoto.addEventListener('change', (e) => {
-    if (e.target.files[0]) selecionarArquivo(e.target.files[0]);
-  });
-
-  ['dragenter', 'dragover'].forEach((evento) => {
-    dropArea.addEventListener(evento, (e) => {
-      e.preventDefault();
-      dropArea.classList.add('arrastando');
-    });
-  });
-  ['dragleave', 'drop'].forEach((evento) => {
-    dropArea.addEventListener(evento, (e) => {
-      e.preventDefault();
-      dropArea.classList.remove('arrastando');
-    });
-  });
-  dropArea.addEventListener('drop', (e) => {
-    const arquivo = e.dataTransfer.files[0];
-    if (arquivo) selecionarArquivo(arquivo);
-  });
-
-  btnEnviar.addEventListener('click', async () => {
-    if (!arquivoSelecionado) return;
-
-    btnEnviar.disabled = true;
-    statusEl.textContent = tipo === 'imagem' ? 'Lendo imagem com OCR (a primeira pode demorar mais)...' : 'Extraindo...';
-    statusEl.className = 'status';
-    cardResultado.classList.add('oculto');
-
-    const formData = new FormData();
-    formData.append('arquivo', arquivoSelecionado);
-
-    const endpoint = tipo === 'pdf' ? '/api/questoes/extrair-pdf' : tipo === 'docx' ? '/api/questoes/extrair-docx' : '/api/questoes/extrair-imagem';
-
-    try {
-      const resposta = await fetch(API_BASE + endpoint, {
-        method: 'POST',
-        body: formData,
-      });
-      const conteudo = await resposta.text();
-      let dados;
-      try {
-        dados = JSON.parse(conteudo);
-      } catch (_) {
-        throw new Error(
-          resposta.status >= 500
-            ? `A Vercel retornou um erro ${resposta.status}. Confira os logs da função. Detalhe: ${conteudo.slice(0, 180)}`
-            : conteudo.slice(0, 180) || 'Resposta inválida do servidor.'
-        );
-      }
-
-      if (!resposta.ok) {
-        throw new Error(dados.erro || 'Erro ao extrair o texto.');
-      }
-
-      statusEl.textContent = 'Extração concluída.';
-      statusEl.className = 'status ok';
-
-      const partesMeta = [`Arquivo: ${dados.nomeArquivo}`];
-      if (typeof dados.paginas === 'number') partesMeta.push(`${dados.paginas} página(s)`);
-      if (dados.avisos && dados.avisos.length) partesMeta.push(`${dados.avisos.length} aviso(s) de conversão`);
-      if (typeof dados.confianca === 'number') partesMeta.push(`confiança OCR: ${dados.confianca}%`);
-      metaEl.textContent = partesMeta.join(' · ');
-
-      textoEl.value = dados.texto || '(nenhum texto encontrado)';
-      cardResultado.classList.remove('oculto');
-
-      await identificarErenderizarQuestoes(dados.texto || '', tipo, arquivoSelecionado?.name || null, listaQuestoesIdentificadasEl, statusIdentificacaoEl);
-    } catch (err) {
-      statusEl.textContent = err.message;
-      statusEl.className = 'status erro';
-    } finally {
-      btnEnviar.disabled = false;
-    }
-  });
-
-  btnCopiar.addEventListener('click', () => {
-    textoEl.select();
-    document.execCommand('copy');
-    btnCopiar.textContent = 'Copiado';
-    setTimeout(() => (btnCopiar.textContent = 'Copiar texto bruto'), 1500);
-  });
-
-  // Monta o texto final de uma questão (enunciado + alternativas, se houver)
-  // a partir do que foi identificado automaticamente, no mesmo formato que
-  // vai para o textarea editável de cada card.
-  function montarTextoQuestao(questao) {
-    const partes = [questao.enunciado];
-    if (questao.alternativas && questao.alternativas.length) {
-      partes.push('', ...questao.alternativas);
-    }
-    return partes.join('\n').trim();
-  }
-
-  async function salvarQuestaoNoFirebase(texto, tipoOrigem, nomeArquivo) {
-    const resposta = await fetch(API_BASE + '/api/questoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto, tipoOrigem, nomeArquivo }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
-    return dados;
-  }
-
-  // Chama o motor de identificação de questões (regras, roda no servidor,
-  // sem custo) e desenha um card editável para cada questão encontrada,
-  // já sem cabeçalho/instruções/rodapé. O professor confere e salva cada
-  // uma individualmente (ou descarta, se o motor tiver incluído algo a
-  // mais por engano). Genérica: serve tanto para texto vindo de arquivo
-  // (PDF/DOCX/OCR) quanto para texto puro colado/digitado à mão — o motor
-  // de identificação não faz diferença de onde o texto veio.
-  async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquivo, containerEl, statusEl) {
-    containerEl.innerHTML = '';
-    if (!textoBruto.trim()) {
-      statusEl.textContent = '';
-      return;
-    }
-
-    statusEl.textContent = 'Identificando questões...';
-    statusEl.className = 'status';
-
-    let questoes = [];
-    let correcaoAplicada = true;
-    try {
-      const resposta = await fetch(API_BASE + '/api/questoes/identificar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoBruto }),
-      });
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível identificar as questões.');
-      questoes = dados.questoes || [];
-      correcaoAplicada = dados.correcaoAplicada !== false;
-    } catch (err) {
-      statusEl.textContent = `Não foi possível identificar automaticamente: ${err.message}`;
-      statusEl.className = 'status erro';
-      return;
-    }
-
-    if (questoes.length === 0) {
-      statusEl.textContent = '';
-      containerEl.innerHTML = `
-        <div class="aviso-identificacao">
-          Nenhuma questão foi reconhecida automaticamente nesse texto (pode ter sobrado só
-          cabeçalho/instrução, ou o formato fugiu do padrão). Revise o texto original e tente
-          reformular com uma numeração mais clara (ex.: "1.", "2)"), se for o caso.
-        </div>`;
-      return;
-    }
-
-    statusEl.textContent = `${questoes.length} questão(ões) identificada(s). Confira cada uma antes de salvar.`;
-    statusEl.className = 'status ok';
-    if (!correcaoAplicada) {
-      statusEl.textContent += ' (correção automática de português indisponível no momento — revise com atenção.)';
-    }
-
-    questoes.forEach((questao) => {
-      const item = document.createElement('div');
-      item.className = 'questao-candidata';
-      item.innerHTML = `
-        <div class="questao-candidata-cabecalho">
-          <strong>Questão ${questao.numero}</strong>
-          <span class="badge">${questao.alternativas && questao.alternativas.length ? 'múltipla escolha' : 'dissertativa'}</span>
-        </div>
-        <textarea class="texto-questao-candidata">${escapeHtml(montarTextoQuestao(questao))}</textarea>
-        <div class="acoes">
-          <button class="salvar btn-salvar-candidata">Salvar questão</button>
-          <button class="verificar btn-verificar-candidata" type="button">Verificar conteúdo com IA</button>
-          <button class="corrigir btn-corrigir-ia-candidata" type="button">Corrigir com IA</button>
-          <button class="excluir btn-descartar-candidata">Descartar</button>
-        </div>
-        <div class="status-inline"></div>
-        <div class="verificacao-conteudo oculto"></div>
-      `;
-      containerEl.appendChild(item);
-
-      const textareaEl = item.querySelector('.texto-questao-candidata');
-      const avisoEl = item.querySelector('.status-inline');
-
-      item.querySelector('.btn-descartar-candidata').addEventListener('click', () => item.remove());
-
-      item.querySelector('.btn-verificar-candidata').addEventListener('click', async (evento) => {
-        const botao = evento.target;
-        const caixaVerificacao = item.querySelector('.verificacao-conteudo');
-        botao.disabled = true;
-        botao.textContent = 'Verificando...';
-        caixaVerificacao.classList.remove('oculto');
-        caixaVerificacao.className = 'verificacao-conteudo';
-        caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
-        try {
-          // Usa o texto atual do textarea (o professor pode já ter editado).
-          // Separa linhas de alternativa (A), B) etc.) do resto, mas
-          // MANTÉM todas as outras linhas juntas no enunciado — questões
-          // dissertativas longas (vindas do PDF) podem ocupar várias
-          // linhas, e usar só a primeira cortava o texto pela metade.
-          const linhas = textareaEl.value.split('\n');
-          const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
-          const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
-          const resposta = await fetch(API_BASE + '/api/questoes/verificar-conteudo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
-          });
-          const dados = await resposta.json();
-          if (!resposta.ok) throw new Error(dados.erro || 'Falha ao verificar.');
-          if (!dados.disponivel) {
-            caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-            caixaVerificacao.textContent = dados.motivo || 'Verificação indisponível no momento.';
-          } else if (dados.coerente) {
-            caixaVerificacao.className = 'verificacao-conteudo ok';
-            caixaVerificacao.textContent = `O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
-          } else {
-            caixaVerificacao.className = 'verificacao-conteudo alerta';
-            caixaVerificacao.textContent = `Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
-          }
-        } catch (err) {
-          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-          caixaVerificacao.textContent = err.message;
-        } finally {
-          botao.disabled = false;
-          botao.textContent = 'Verificar conteúdo com IA';
-        }
-      });
-
-      item.querySelector('.btn-corrigir-ia-candidata').addEventListener('click', async (evento) => {
-        const botao = evento.target;
-        const caixaVerificacao = item.querySelector('.verificacao-conteudo');
-        botao.disabled = true;
-        botao.textContent = 'Corrigindo...';
-        caixaVerificacao.classList.remove('oculto');
-        caixaVerificacao.className = 'verificacao-conteudo';
-        caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
-        try {
-          // Mesma separação enunciado/alternativas usada no "Verificar
-          // conteúdo com IA" acima — ver comentário lá pro porquê.
-          const linhas = textareaEl.value.split('\n');
-          const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
-          const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
-          const resposta = await fetch(API_BASE + '/api/questoes/corrigir-com-ia', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
-          });
-          const dados = await resposta.json();
-          if (!resposta.ok) throw new Error(dados.erro || 'Falha ao corrigir.');
-          if (!dados.disponivel) {
-            caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-            caixaVerificacao.textContent = dados.motivo || 'Correção indisponível no momento.';
-          } else {
-            // Só atualiza o textarea — o professor decide se clica em
-            // "Salvar questão" depois de revisar o resultado. Nada é
-            // salvo automaticamente.
-            const partes = [dados.enunciado];
-            if (dados.alternativas && dados.alternativas.length) {
-              partes.push('', ...dados.alternativas);
-            }
-            textareaEl.value = partes.join('\n').trim();
-            // Se o backend sinalizou que o texto encolheu muito (possível
-            // apagamento de conteúdo real, não só ruído), mostra em
-            // destaque (âmbar) em vez do "ok" normal.
-            const possivelPerdaDeConteudo = (dados.observacao || '').toLowerCase().startsWith('[atenção]');
-            const observacaoLimpa = (dados.observacao || '').replace(/^\[atenção\]\s*/i, '');
-            caixaVerificacao.className = possivelPerdaDeConteudo
-              ? 'verificacao-conteudo alerta'
-              : 'verificacao-conteudo ok';
-            caixaVerificacao.textContent = observacaoLimpa
-              ? `${possivelPerdaDeConteudo ? '' : 'Corrigido: '}${observacaoLimpa} Revise antes de salvar.`
-              : 'A IA não encontrou nada pra corrigir aqui.';
-          }
-        } catch (err) {
-          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-          caixaVerificacao.textContent = err.message;
-        } finally {
-          botao.disabled = false;
-          botao.textContent = 'Corrigir com IA';
-        }
-      });
-
-      item.querySelector('.btn-salvar-candidata').addEventListener('click', async (evento) => {
-        if (!textareaEl.value.trim()) {
-          avisoEl.className = 'status-inline erro';
-          avisoEl.textContent = 'A questão não pode ficar vazia.';
-          return;
-        }
-        const botao = evento.target;
-        botao.disabled = true;
-        item.querySelector('.btn-descartar-candidata').disabled = true;
-        avisoEl.className = 'status-inline';
-        avisoEl.textContent = 'Salvando no Firebase...';
-        try {
-          await salvarQuestaoNoFirebase(textareaEl.value, tipoOrigem, nomeArquivo);
-          item.classList.add('salva');
-          avisoEl.className = 'status-inline';
-          avisoEl.textContent = 'Salva com sucesso.';
-          textareaEl.readOnly = true;
-          botao.textContent = 'Salva';
-          item.querySelector('.btn-descartar-candidata').classList.add('oculto');
-          carregarQuestoes();
-        } catch (err) {
-          avisoEl.className = 'status-inline erro';
-          avisoEl.textContent = err.message;
-          botao.disabled = false;
-          item.querySelector('.btn-descartar-candidata').disabled = false;
-        }
-      });
-    });
-  }
-
-  const btnCarregarQuestoes = document.getElementById('btnCarregarQuestoes');
-  const statusQuestoesEl = document.getElementById('statusQuestoes');
-  const listaQuestoesEl = document.getElementById('listaQuestoes');
-
-  // Renderiza a lista de questões salvas como linhas de tabela (Cód.,
-  // Enunciado, Origem, Data, Ações) — o "Cód." é só a posição na lista
-  // (Q1, Q2, Q3...), não um código de verdade gerado pelo banco.
-  async function carregarQuestoes() {
-    statusQuestoesEl.textContent = 'Carregando...';
-    statusQuestoesEl.className = 'status';
-    try {
-      const resposta = await fetch(API_BASE + '/api/questoes');
-      const dados = await resposta.json();
-      if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível carregar as questões.');
-
-      if (!dados.questoes || dados.questoes.length === 0) {
-        listaQuestoesEl.innerHTML = '<tr><td colspan="5" class="tabela-vazia">Nenhuma questão salva ainda.</td></tr>';
-      } else {
-        listaQuestoesEl.innerHTML = dados.questoes.map((questao, indice) => {
-          const enunciadoCompleto = (questao.texto || '').replace(/\s+/g, ' ').trim();
-          const preview = enunciadoCompleto.length > 90 ? enunciadoCompleto.slice(0, 90) + '…' : enunciadoCompleto;
-          const dataFormatada = questao.criadoEm ? new Date(questao.criadoEm).toLocaleDateString('pt-BR') : '—';
-          return `
-            <tr>
-              <td class="codigo-questao">Q${indice + 1}</td>
-              <td><span class="enunciado-preview" title="${escapeHtml(enunciadoCompleto)}">${escapeHtml(preview || '(vazio)')}</span></td>
-              <td class="origem-preview">${escapeHtml(questao.tipoOrigem || questao.nomeArquivo || '—')}</td>
-              <td class="origem-preview">${escapeHtml(dataFormatada)}</td>
-              <td>
-                <button class="excluir excluir-questao" data-id="${escapeHtml(questao.id)}">Excluir</button>
-                <div class="confirmacao-exclusao oculto">
-                  <span>Excluir esta questão permanentemente?</span>
-                  <button class="confirmar-exclusao">Confirmar</button>
-                  <button class="cancelar-exclusao">Cancelar</button>
-                </div>
-              </td>
-            </tr>
-          `;
-        }).join('');
-      }
-
-      statusQuestoesEl.textContent = `${dados.questoes.length} questão(ões) carregada(s).`;
-      statusQuestoesEl.className = 'status ok';
-      listaQuestoesEl.querySelectorAll('.excluir-questao').forEach((botao) => botao.addEventListener('click', () => {
-        const confirmacao = botao.parentElement.querySelector('.confirmacao-exclusao');
-        confirmacao.classList.remove('oculto');
-        botao.classList.add('oculto');
-      }));
-      listaQuestoesEl.querySelectorAll('.cancelar-exclusao').forEach((botao) => botao.addEventListener('click', () => {
-        const confirmacao = botao.closest('.confirmacao-exclusao');
-        confirmacao.classList.add('oculto');
-        confirmacao.parentElement.querySelector('.excluir-questao').classList.remove('oculto');
-      }));
-      listaQuestoesEl.querySelectorAll('.confirmar-exclusao').forEach((botao) => botao.addEventListener('click', async () => {
-        const confirmacao = botao.closest('.confirmacao-exclusao');
-        const linha = confirmacao.closest('tr');
-        const excluirBotao = linha.querySelector('.excluir-questao');
-        botao.disabled = true;
-        try {
-          const resposta = await fetch(API_BASE + '/api/questoes/' + encodeURIComponent(excluirBotao.dataset.id), { method: 'DELETE' });
-          const erro = await resposta.json();
-          if (!resposta.ok) throw new Error(erro.erro || 'Não foi possível excluir a questão.');
-          linha.remove();
-          statusQuestoesEl.textContent = 'Questão excluída com sucesso.';
-          statusQuestoesEl.className = 'status ok';
-        } catch (err) {
-          botao.disabled = false;
-          confirmacao.querySelector('span').textContent = err.message;
-        }
-      }));
-    } catch (err) {
-      statusQuestoesEl.textContent = err.message;
-      statusQuestoesEl.className = 'status erro';
-    }
-  }
-
-  btnCarregarQuestoes.addEventListener('click', carregarQuestoes);
-  carregarQuestoes();
-
-  const btnVerificarEmail = document.getElementById('btnVerificarEmail');
-  const statusEmailEl = document.getElementById('statusEmail');
-  const listaEmailsEl = document.getElementById('listaEmails');
-
-  function escapeHtml(texto) {
-    const div = document.createElement('div');
-    div.textContent = texto;
-    return div.innerHTML;
-  }
-
-  async function salvarTexto(texto, tipoOrigem, nomeArquivo) {
-    const resposta = await fetch(API_BASE + '/api/questoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto, conteudoHtml: arguments[3] || '', tipoOrigem, nomeArquivo }),
-    });
-    const dados = await resposta.json();
-    if (!resposta.ok) throw new Error(dados.erro || 'Não foi possível salvar a questão.');
-    return dados;
-  }
-
-  function mostrarErroNoCard(elemento, mensagem) {
-    const card = elemento.closest('.email-item');
-    if (!card) return;
-    let aviso = card.querySelector('.status-inline');
-    if (!aviso) {
-      aviso = document.createElement('div');
-      aviso.className = 'status-inline erro';
-      card.appendChild(aviso);
-    }
-    aviso.textContent = mensagem;
-  }
-
-  const editorQuestao = document.getElementById('editorQuestao');
-  const statusEditadaEl = document.getElementById('statusEditada');
-  const listaQuestoesIdentificadasManualEl = document.getElementById('listaQuestoesIdentificadasManual');
-  document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
-    const texto = editorQuestao.innerText.trim();
-    if (!texto) {
-      statusEditadaEl.textContent = 'Escreva ou cole um texto antes de identificar.';
-      statusEditadaEl.className = 'status erro';
-      return;
-    }
-    const botao = document.getElementById('btnSalvarEditada');
-    botao.disabled = true;
-    try {
-      await identificarErenderizarQuestoes(texto, 'manual', 'questao-escrita', listaQuestoesIdentificadasManualEl, statusEditadaEl);
-    } finally {
-      botao.disabled = false;
-    }
-  });
-
-  btnVerificarEmail.addEventListener('click', async () => {
-    btnVerificarEmail.disabled = true;
-    statusEmailEl.textContent = 'Verificando caixa de entrada...';
-    statusEmailEl.className = 'status';
-    listaEmailsEl.innerHTML = '';
-
-    try {
-      const resposta = await fetch(API_BASE + '/api/questoes/verificar-email', { method: 'POST' });
-      const dados = await resposta.json();
-
-      if (!resposta.ok) {
-        throw new Error(dados.erro || 'Erro ao verificar e-mails.');
-      }
-
-      statusEmailEl.textContent = `${dados.quantidade} e-mail(s) novo(s) processado(s).`;
-      statusEmailEl.className = 'status ok';
-
-      dados.emails.forEach((email) => {
-        const anexosHtml = (email.anexos || []).map((anexo, indice) => `
-          <div class="anexo">
-            <div class="anexo-nome">${escapeHtml(anexo.nomeArquivo || 'anexo')}</div>
-            <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || '').slice(0, 500))}</div>
-            ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-email="${dados.emails.indexOf(email)}" data-anexo="${indice}">Salvar anexo</button>` : ''}
-          </div>
-        `).join('');
-
-        const item = document.createElement('div');
-        item.className = 'email-item';
-        item.innerHTML = `
-          <div class="assunto">${escapeHtml(email.assunto || '(sem assunto)')}</div>
-          <div class="remetente">${escapeHtml(email.de || '')}</div>
-          <div class="corpo">${escapeHtml(email.textoCorpo || '(corpo vazio)')}</div>
-          ${email.textoCorpo ? '<button class="salvar salvar-email-corpo">Salvar corpo</button>' : ''}
-          <button class="excluir remover-email">Remover da tela</button>
-          ${anexosHtml}
-        `;
-        listaEmailsEl.appendChild(item);
-        item.querySelector('.remover-email').addEventListener('click', () => item.remove());
-        item.querySelector('.salvar-email-corpo')?.addEventListener('click', async (evento) => {
-          evento.target.disabled = true;
-          try {
-            await salvarTexto(email.textoCorpo, 'email', email.assunto || 'email');
-            evento.target.textContent = 'Salvo';
-            carregarQuestoes();
-          } catch (err) { mostrarErroNoCard(evento.target, err.message); evento.target.disabled = false; }
-        });
-        item.querySelectorAll('.salvar-email-anexo').forEach((botao) => botao.addEventListener('click', async (evento) => {
-          evento.target.disabled = true;
-          const anexo = email.anexos[Number(evento.target.dataset.anexo)];
-          try {
-            await salvarTexto(anexo.texto, anexo.tipo || 'email-anexo', anexo.nomeArquivo || 'anexo');
-            evento.target.textContent = 'Salvo';
-            carregarQuestoes();
-          } catch (err) { mostrarErroNoCard(evento.target, err.message); evento.target.disabled = false; }
-        }));
-      });
-    } catch (err) {
-      statusEmailEl.textContent = err.message;
-      statusEmailEl.className = 'status erro';
-    } finally {
-      btnVerificarEmail.disabled = false;
-    }
-  });
-</script>
+  <script src="app.js"></script>
+  <script src="montarProva.js"></script>
 </body>
 </html>
