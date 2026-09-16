@@ -179,12 +179,13 @@ app.post('/api/questoes/extrair-pdf', upload.single('arquivo'), async (req, res)
       return res.status(400).json({ erro: 'Nenhum arquivo enviado. Use o campo "arquivo".' });
     }
 
-    const { texto, paginas } = await extrairTextoPdf(req.file.buffer);
+    const { texto, paginas, avisos } = await extrairTextoPdf(req.file.buffer);
 
     return res.json({
       nomeArquivo: corrigirNomeArquivo(req.file.originalname),
       paginas,
       texto,
+      avisos,
     });
   } catch (err) {
     console.error('Erro ao extrair PDF:', err.message);
