@@ -730,3 +730,120 @@
     .indicadores { grid-template-columns: 1fr; }
     table.tabela-provas { display: block; overflow-x: auto; white-space: nowrap; }
   }
+
+  /* ================================================================
+     Autenticação: tela de login/cadastro/recuperação de senha
+     ================================================================ */
+
+  .login-shell {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 2rem 1rem;
+  }
+  .login-card {
+    width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 2.25rem 2rem; box-shadow: 0 1px 2px rgba(20,20,30,0.04);
+  }
+  .login-marca { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1.6rem; }
+  .login-titulo { margin: 0 0 0.3rem; font-size: 1.5rem; }
+  .login-subtitulo { color: var(--ink-muted); font-size: 0.85rem; margin: 0 0 1.5rem; }
+
+  .perfil-seletor { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-bottom: 1.25rem; }
+  .perfil-opcao {
+    display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+    padding: 0.9rem 0.5rem; border: 1px solid var(--rule); border-radius: 8px;
+    background: var(--surface); cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    color: var(--ink-muted);
+  }
+  .perfil-opcao svg { opacity: 0.7; }
+  .perfil-opcao.ativo { background: var(--paper); border-color: var(--rule-strong); color: var(--ink); }
+  .perfil-opcao.ativo svg { opacity: 1; }
+  .perfil-opcao:hover { border-color: var(--rule-strong); }
+
+  .login-rotulo { font-size: 0.78rem; color: var(--ink-muted); margin: 0 0 0.3rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  .login-linha-fim { display: flex; align-items: center; justify-content: space-between; margin: 0.9rem 0 1.3rem; font-size: 0.83rem; }
+  .login-checkbox { display: flex; align-items: center; gap: 0.45rem; color: var(--ink-muted); }
+  .login-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 0.83rem; font-family: var(--sans); }
+  .login-link:hover { text-decoration: underline; }
+  .login-rodape { text-align: center; margin-top: 1.4rem; font-size: 0.83rem; color: var(--ink-muted); }
+  .login-vista.oculto { display: none; }
+
+  /* ================================================================
+     Tela de Perfil
+     ================================================================ */
+
+  .perfil-cabecalho {
+    display: flex; align-items: center; gap: 1rem; padding: 1.3rem 1.5rem; margin-bottom: 1.75rem;
+  }
+  .avatar-grande {
+    width: 56px; height: 56px; border-radius: 999px; background: var(--paper);
+    border: 1px solid var(--rule); display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-weight: 500; font-size: 1.2rem; flex-shrink: 0;
+  }
+  .perfil-cabecalho h2 { margin: 0 0 0.15rem; font-size: 1.15rem; }
+  .perfil-cabecalho .legenda { color: var(--ink-muted); font-size: 0.82rem; }
+
+  .perfil-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; align-items: start; }
+  .perfil-secao-titulo { font-size: 1rem; font-family: var(--serif); margin: 0 0 0.2rem; }
+  .perfil-secao-legenda { color: var(--ink-muted); font-size: 0.82rem; margin: 0 0 0.9rem; }
+  .perfil-secao { margin-bottom: 1.75rem; }
+
+  .linha-config {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.9rem 0; border-bottom: 1px solid var(--rule);
+  }
+  .linha-config:last-child { border-bottom: none; }
+  .linha-config .rotulo { font-weight: 500; font-size: 0.88rem; }
+  .linha-config .descricao { color: var(--ink-muted); font-size: 0.78rem; margin-top: 0.1rem; }
+
+  .toggle-switch { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0; background: var(--rule); border-radius: 999px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+    background: var(--surface); border-radius: 50%; transition: transform 0.15s;
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--ink); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(16px); }
+  .toggle-switch input:disabled + .toggle-slider { cursor: not-allowed; opacity: 0.5; }
+
+  .zona-risco { border-color: var(--claret-soft); }
+  .linha-perigo {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.7rem 0.9rem; border: 1px solid var(--claret-soft); border-radius: 6px; background: var(--claret-soft);
+  }
+  .linha-perigo .rotulo { font-weight: 500; font-size: 0.86rem; color: var(--claret); }
+  .linha-perigo .descricao { color: var(--ink-muted); font-size: 0.78rem; }
+  .btn-perigo {
+    background: var(--surface); color: var(--claret); border: 1px solid var(--claret);
+    border-radius: 6px; padding: 0.5rem 0.9rem; font-size: 0.82rem; font-weight: 500; cursor: pointer;
+    font-family: var(--sans); flex-shrink: 0;
+  }
+  .btn-perigo:hover { background: var(--claret); color: #fff; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,20,25,0.4); display: flex;
+    align-items: center; justify-content: center; z-index: 50; padding: 1rem;
+  }
+  .modal-overlay.oculto { display: none; }
+  .modal-caixa {
+    width: 100%; max-width: 380px; background: var(--surface); border-radius: 10px;
+    padding: 1.6rem 1.5rem; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  }
+  .modal-caixa h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
+  .modal-caixa p { color: var(--ink-muted); font-size: 0.85rem; margin: 0 0 1rem; line-height: 1.5; }
+  .modal-acoes { display: flex; gap: 0.6rem; margin-top: 1.1rem; }
+  .modal-acoes button { flex: 1; }
+
+  .campo-select {
+    font-family: var(--sans); font-size: 0.85rem; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--rule); border-radius: 6px; padding: 0.4rem 0.6rem;
+  }
+  .campo-select:focus { outline: none; border-color: var(--accent); }
+
+  @media (max-width: 760px) {
+    .perfil-grid { grid-template-columns: 1fr; }
+    .login-card { padding: 1.6rem 1.4rem; }
+  }

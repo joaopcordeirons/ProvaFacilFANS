@@ -6,6 +6,7 @@
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const nodemailer = require('nodemailer');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 
 const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -98,4 +99,68 @@ async function verificarNovosEmails() {
   return emailsProcessados;
 }
 
-module.exports = { verificarNovosEmails, credenciaisConfiguradas };
+/* ------------------------------------------------- envio: recuperação de senha */
+
+let transportador = null;
+
+// Mesma conta usada para receber questões por e-mail (GMAIL_USER /
+// GMAIL_APP_PASSWORD) serve também para enviar o link de recuperação de
+// senha — evita configurar um segundo serviço de e-mail só para isso.
+function obterTransportador() {
+  if (transportador) return transportador;
+  if (!credenciaisConfiguradas()) return null;
+  transportador = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
+  return transportador;
+}
+
+// Envia o link de redefinição de senha. Se o Gmail não estiver
+// configurado no ambiente (ex.: desenvolvimento local sem .env
+// completo), não derruba o fluxo — só registra o link no console para o
+// desenvolvedor testar manualmente, e avisa quem chamou que não foi
+// enviado de verdade.
+async function enviarEmailRecuperacao(destino, nome, link) {
+  const cliente = obterTransportador();
+  if (!cliente) {
+    console.warn(
+      `[emailService] GMAIL_USER/GMAIL_APP_PASSWORD não configurados — link de recuperação para ${destino}: ${link}`
+    );
+    return { enviado: false };
+  }
+
+  await cliente.sendMail({
+    from: `"ProvaFácil FANS" <${process.env.GMAIL_USER}>`,
+    to: destino,
+    subject: 'Redefinição de senha — ProvaFácil FANS',
+    text: `Olá, ${nome || ''}.\n\nRecebemos um pedido para redefinir a senha da sua conta no ProvaFácil FANS.\n\nPara escolher uma nova senha, acesse o link abaixo (válido por 1 hora):\n${link}\n\nSe você não pediu essa redefinição, pode ignorar este e-mail — sua senha continua a mesma.`,
+    html: `<p>Olá, ${nome || ''}.</p><p>Recebemos um pedido para redefinir a senha da sua conta no <strong>ProvaFácil FANS</strong>.</p><p>Para escolher uma nova senha, acesse o link abaixo (válido por 1 hora):</p><p><a href="${link}">${link}</a></p><p>Se você não pediu essa redefinição, pode ignorar este e-mail — sua senha continua a mesma.</p>`,
+  });
+  return { enviado: true };
+}
+
+// Envia o link de verificação de e-mail, usado logo após o cadastro (a
+// conta fica com emailVerificado:false e login bloqueado até o professor
+// clicar no link). Mesma lógica de fallback da recuperação de senha: sem
+// Gmail configurado, só registra o link no console.
+async function enviarEmailVerificacao(destino, nome, link) {
+  const cliente = obterTransportador();
+  if (!cliente) {
+    console.warn(
+      `[emailService] GMAIL_USER/GMAIL_APP_PASSWORD não configurados — link de verificação para ${destino}: ${link}`
+    );
+    return { enviado: false };
+  }
+
+  await cliente.sendMail({
+    from: `"ProvaFácil FANS" <${process.env.GMAIL_USER}>`,
+    to: destino,
+    subject: 'Confirme seu e-mail — ProvaFácil FANS',
+    text: `Olá, ${nome || ''}.\n\nPara concluir seu cadastro no ProvaFácil FANS e liberar o acesso, confirme seu e-mail no link abaixo (válido por 24 horas):\n${link}\n\nSe você não fez esse cadastro, pode ignorar este e-mail.`,
+    html: `<p>Olá, ${nome || ''}.</p><p>Para concluir seu cadastro no <strong>ProvaFácil FANS</strong> e liberar o acesso, confirme seu e-mail no link abaixo (válido por 24 horas):</p><p><a href="${link}">${link}</a></p><p>Se você não fez esse cadastro, pode ignorar este e-mail.</p>`,
+  });
+  return { enviado: true };
+}
+
+module.exports = { verificarNovosEmails, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao };

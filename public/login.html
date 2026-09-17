@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrar — ProvaFácil FANS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-marca">
+        <span class="logo-mark">PF</span>
+        <span class="logo-nome">FANS · ProvaFácil</span>
+      </div>
+
+      <!-- ===================== VISTA: LOGIN ===================== -->
+      <div class="login-vista" id="vistaLogin">
+        <h1 class="login-titulo">Bem-vindo de volta</h1>
+        <p class="login-subtitulo">Sistema de Gestão e Geração de Provas ABNT</p>
+
+        <p class="login-rotulo">Selecione seu perfil</p>
+        <div class="perfil-seletor" id="perfilSeletorLogin">
+          <button type="button" class="perfil-opcao ativo" data-perfil="professor">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c0-2.7 2.5-4.5 5.5-4.5s5.5 1.8 5.5 4.5"/></svg>
+            Professor
+          </button>
+          <button type="button" class="perfil-opcao" data-perfil="direcao">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 7.2 8 2l6 5.2V14H2z"/><path d="M6 14v-4h4v4"/></svg>
+            Direção
+          </button>
+        </div>
+
+        <form id="formLogin">
+          <label class="campo">E-mail institucional
+            <input type="email" id="loginEmail" autocomplete="username" required>
+          </label>
+          <label class="campo">Senha
+            <input type="password" id="loginSenha" autocomplete="current-password" required minlength="8">
+          </label>
+
+          <div class="login-linha-fim">
+            <label class="login-checkbox">
+              <input type="checkbox" id="loginLembrar"> Manter conectado
+            </label>
+            <button type="button" class="login-link" id="btnIrEsqueci">Esqueci minha senha</button>
+          </div>
+
+          <button type="submit" class="btn-escuro largo" id="btnEntrar">Entrar no sistema</button>
+          <div class="status" id="statusLogin"></div>
+          <button type="button" class="login-link oculto" id="btnReenviarDoLogin">Reenviar e-mail de confirmação</button>
+        </form>
+
+        <div class="login-rodape">
+          Ainda não tem conta? <button type="button" class="login-link" id="btnIrCadastro">Criar conta</button>
+        </div>
+      </div>
+
+      <!-- ===================== VISTA: CADASTRO ===================== -->
+      <div class="login-vista oculto" id="vistaCadastro">
+        <h1 class="login-titulo">Criar conta</h1>
+        <p class="login-subtitulo">Cadastro para professores e direção da instituição</p>
+
+        <p class="login-rotulo">Perfil</p>
+        <div class="perfil-seletor" id="perfilSeletorCadastro">
+          <button type="button" class="perfil-opcao ativo" data-perfil="professor">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c0-2.7 2.5-4.5 5.5-4.5s5.5 1.8 5.5 4.5"/></svg>
+            Professor
+          </button>
+          <button type="button" class="perfil-opcao" data-perfil="direcao">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 7.2 8 2l6 5.2V14H2z"/><path d="M6 14v-4h4v4"/></svg>
+            Direção
+          </button>
+        </div>
+
+        <form id="formCadastro">
+          <label class="campo">Nome completo
+            <input type="text" id="cadastroNome" autocomplete="name" required>
+          </label>
+          <label class="campo">E-mail institucional
+            <input type="email" id="cadastroEmail" autocomplete="username" required>
+          </label>
+          <div class="campos-lado-a-lado">
+            <label class="campo">Instituição
+              <input type="text" id="cadastroInstituicao" placeholder="Faculdade Nova Serrana">
+            </label>
+            <label class="campo">Cargo
+              <input type="text" id="cadastroCargo" placeholder="Professor">
+            </label>
+          </div>
+          <label class="campo">Senha
+            <input type="password" id="cadastroSenha" autocomplete="new-password" required minlength="8">
+          </label>
+          <label class="campo">Confirmar senha
+            <input type="password" id="cadastroConfirmarSenha" autocomplete="new-password" required minlength="8">
+          </label>
+
+          <button type="submit" class="btn-escuro largo" id="btnCadastrar">Criar conta</button>
+          <div class="status" id="statusCadastro"></div>
+        </form>
+
+        <div class="login-rodape">
+          Já tem conta? <button type="button" class="login-link" id="btnVoltarLoginDeCadastro">Entrar</button>
+        </div>
+      </div>
+
+      <!-- ===================== VISTA: ESQUECI MINHA SENHA ===================== -->
+      <div class="login-vista oculto" id="vistaEsqueci">
+        <h1 class="login-titulo">Recuperar senha</h1>
+        <p class="login-subtitulo">Informe o e-mail da sua conta. Enviaremos um link para você escolher uma nova senha.</p>
+
+        <form id="formEsqueci">
+          <label class="campo">E-mail institucional
+            <input type="email" id="esqueciEmail" autocomplete="username" required>
+          </label>
+          <button type="submit" class="btn-escuro largo" id="btnEnviarRecuperacao">Enviar link de recuperação</button>
+          <div class="status" id="statusEsqueci"></div>
+        </form>
+
+        <div class="login-rodape">
+          <button type="button" class="login-link" id="btnVoltarLoginDeEsqueci">← Voltar para o login</button>
+        </div>
+      </div>
+
+      <!-- ===================== VISTA: CONFIRME SEU E-MAIL (pós-cadastro) ===================== -->
+      <div class="login-vista oculto" id="vistaConfirmeEmail">
+        <h1 class="login-titulo">Confirme seu e-mail</h1>
+        <p class="login-subtitulo">Enviamos um link de confirmação para <strong id="confirmeEmailEndereco"></strong>. Abra sua caixa de entrada e clique no link para liberar o acesso.</p>
+
+        <button type="button" class="login-link" id="btnReenviarConfirmacao">Não recebeu? Reenviar link</button>
+        <div class="status" id="statusConfirmeEmail"></div>
+
+        <div class="login-rodape">
+          <button type="button" class="login-link" id="btnVoltarLoginDeConfirme">← Voltar para o login</button>
+        </div>
+      </div>
+
+      <!-- ===================== VISTA: DEFINIR NOVA SENHA (via link do e-mail) ===================== -->
+      <div class="login-vista oculto" id="vistaRedefinir">
+        <h1 class="login-titulo">Definir nova senha</h1>
+        <p class="login-subtitulo">Escolha uma nova senha para a sua conta.</p>
+
+        <form id="formRedefinir">
+          <label class="campo">Nova senha
+            <input type="password" id="redefinirSenha" autocomplete="new-password" required minlength="8">
+          </label>
+          <label class="campo">Confirmar nova senha
+            <input type="password" id="redefinirConfirmarSenha" autocomplete="new-password" required minlength="8">
+          </label>
+          <button type="submit" class="btn-escuro largo" id="btnRedefinir">Salvar nova senha</button>
+          <div class="status" id="statusRedefinir"></div>
+        </form>
+      </div>
+
+      <!-- ===================== VISTA: CONFIRMANDO E-MAIL (via link do e-mail) ===================== -->
+      <div class="login-vista oculto" id="vistaVerificandoEmail">
+        <h1 class="login-titulo">Confirmando seu e-mail…</h1>
+        <p class="login-subtitulo" id="verificandoEmailTexto">Só um instante.</p>
+        <div class="status" id="statusVerificandoEmail"></div>
+        <div class="login-rodape">
+          <button type="button" class="login-link oculto" id="btnVoltarLoginDeVerificado">Ir para o login</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+</html>

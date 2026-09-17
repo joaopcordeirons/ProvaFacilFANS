@@ -8,11 +8,12 @@ require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const cookieParser = require('cookie-parser');
 const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./extratores');
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
-const { verificarNovosEmails, credenciaisConfiguradas } = require('./emailService');
+const { verificarNovosEmails, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
 const {
   criarQuestao,
   listarQuestoes,
@@ -24,6 +25,26 @@ const {
   listarProvas,
   atualizarStatusProva,
 } = require('./firebase');
+const {
+  criarUsuario,
+  autenticar,
+  buscarUsuarioPorId,
+  gerarTokenRecuperacao,
+  redefinirSenhaComToken,
+  verificarEmailComToken,
+  gerarTokenVerificacao,
+  alterarSenha,
+  atualizarPerfil,
+  excluirUsuario,
+  formatarUsuarioPublico,
+} = require('./auth');
+const {
+  gerarToken,
+  definirCookieSessao,
+  limparCookieSessao,
+  exigirAutenticacao,
+  paginaProtegida,
+} = require('./authMiddleware');
 const { montarPdfProva } = require('./provaPdf');
 const { montarDocxProva } = require('./provaDocx');
 const { nomeArquivo } = require('./modeloProva');
@@ -31,7 +52,15 @@ const { nomeArquivo } = require('./modeloProva');
 const app = express();
 const PORT = process.env.PORT || 80;
 
-// Serve a interface web de teste (public/index.html) em http://localhost:3001
+app.use(cookieParser());
+
+// A raiz do app (a SPA em public/index.html) exige sessão válida — sem
+// login, o navegador é redirecionado para a tela de login. As demais
+// páginas estáticas (login.html, style.css, app.js...) continuam
+// públicas, senão nem a tela de login carregaria.
+app.get(['/', '/index.html'], paginaProtegida);
+
+// Serve a interface web (public/) em http://localhost:3001
 app.use(express.static(path.join(__dirname, 'public')));
 
 const MIME_DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -91,6 +120,216 @@ const uploadImagem = multer({
 app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', mensagem: 'API de extração de PDF no ar.' });
 });
+
+/* ================================================================== */
+/* ============================ AUTENTICAÇÃO ========================= */
+/* ================================================================== */
+
+// Link de "voltar ao site" usado no e-mail de recuperação de senha —
+// construído a partir da própria requisição, então funciona tanto em
+// localhost quanto no domínio da Vercel sem precisar configurar mais
+// uma variável de ambiente.
+function origemDoPedido(req) {
+  const protocolo = req.headers['x-forwarded-proto'] || req.protocol;
+  return `${protocolo}://${req.get('host')}`;
+}
+
+// Cadastro de um novo professor ou de um membro da direção. A conta
+// nasce com emailVerificado:false e SEM sessão aberta — o login só é
+// liberado depois que o link enviado por e-mail for confirmado.
+app.post('/api/auth/registrar', express.json({ limit: '20kb' }), async (req, res) => {
+  try {
+    const { nome, email, senha, perfil, instituicao, cargo } = req.body || {};
+    const { usuario, tokenVerificacao } = await criarUsuario({ nome, email, senha, perfil, instituicao, cargo });
+
+    const link = `${origemDoPedido(req)}/login.html?verificar=${tokenVerificacao}`;
+    await enviarEmailVerificacao(usuario.email, usuario.nome, link);
+
+    return res.status(201).json({
+      usuario,
+      mensagem: 'Conta criada! Enviamos um link de confirmação para o seu e-mail — confirme para poder entrar.',
+    });
+  } catch (err) {
+    console.error('Erro ao registrar usuário:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Login: confere e-mail/senha, exige e-mail confirmado e, se a conta
+// bater com o perfil selecionado na tela (professor/direção), abre a sessão.
+app.post('/api/auth/login', express.json({ limit: '10kb' }), async (req, res) => {
+  try {
+    const { email, senha, perfil, lembrarConectado } = req.body || {};
+    const doc = await autenticar(email, senha);
+    if (!doc) {
+      return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    }
+
+    const usuario = formatarUsuarioPublico(doc);
+    if (!usuario.emailVerificado) {
+      return res.status(403).json({
+        erro: 'Confirme seu e-mail para poder entrar. Verifique sua caixa de entrada.',
+        emailNaoVerificado: true,
+      });
+    }
+    if (perfil && usuario.perfil !== perfil) {
+      const rotulo = usuario.perfil === 'direcao' ? 'Direção' : 'Professor';
+      return res.status(403).json({
+        erro: `Essa conta está cadastrada como ${rotulo}. Selecione o perfil correto para entrar.`,
+      });
+    }
+
+    const token = gerarToken(usuario, Boolean(lembrarConectado));
+    definirCookieSessao(req, res, token, Boolean(lembrarConectado));
+    return res.json({ usuario });
+  } catch (err) {
+    console.error('Erro ao fazer login:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Confirmação do link de verificação enviado por e-mail no cadastro.
+app.post('/api/auth/verificar-email', express.json({ limit: '5kb' }), async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (typeof token !== 'string' || !token) {
+      return res.status(400).json({ erro: 'Link de verificação inválido.' });
+    }
+    const usuario = await verificarEmailComToken(token);
+    return res.json({ ok: true, usuario });
+  } catch (err) {
+    console.error('Erro ao verificar e-mail:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Reenvio do link de verificação (ex.: professor não achou o e-mail ou o
+// link de 24h expirou). Resposta sempre genérica, mesma lógica do
+// "esqueci minha senha" — não revela se o e-mail existe ou já foi confirmado.
+app.post('/api/auth/reenviar-verificacao', express.json({ limit: '5kb' }), async (req, res) => {
+  const MENSAGEM_GENERICA = { ok: true, mensagem: 'Se esse e-mail tiver uma conta pendente de confirmação, reenviamos o link.' };
+  try {
+    const { email } = req.body || {};
+    if (typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ erro: 'Informe o e-mail.' });
+    }
+
+    const resultado = await gerarTokenVerificacao(email);
+    if (resultado) {
+      const link = `${origemDoPedido(req)}/login.html?verificar=${resultado.token}`;
+      await enviarEmailVerificacao(resultado.usuario.email, resultado.usuario.nome, link);
+    }
+    return res.json(MENSAGEM_GENERICA);
+  } catch (err) {
+    console.error('Erro ao reenviar verificação:', err.message);
+    return res.json(MENSAGEM_GENERICA);
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  limparCookieSessao(req, res);
+  return res.json({ ok: true });
+});
+
+// Usado pelo front-end para saber, a cada carregamento, se a sessão
+// ainda é válida e quem é o usuário logado.
+app.get('/api/auth/me', exigirAutenticacao, async (req, res) => {
+  try {
+    const usuario = await buscarUsuarioPorId(req.usuarioId);
+    if (!usuario) {
+      limparCookieSessao(req, res);
+      return res.status(401).json({ erro: 'Sessão inválida.' });
+    }
+    return res.json({ usuario });
+  } catch (err) {
+    console.error('Erro ao carregar usuário logado:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Pedido de recuperação de senha. A resposta é sempre a mesma, exista ou
+// não o e-mail na base — isso evita que alguém use esse endpoint para
+// descobrir quais e-mails têm conta no sistema.
+app.post('/api/auth/esqueci-senha', express.json({ limit: '5kb' }), async (req, res) => {
+  const MENSAGEM_GENERICA = { ok: true, mensagem: 'Se esse e-mail tiver uma conta, enviamos um link de recuperação para ele.' };
+  try {
+    const { email } = req.body || {};
+    if (typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ erro: 'Informe o e-mail.' });
+    }
+
+    const resultado = await gerarTokenRecuperacao(email);
+    if (resultado) {
+      const link = `${origemDoPedido(req)}/login.html?token=${resultado.token}`;
+      await enviarEmailRecuperacao(resultado.usuario.email, resultado.usuario.nome, link);
+    }
+    return res.json(MENSAGEM_GENERICA);
+  } catch (err) {
+    console.error('Erro ao gerar recuperação de senha:', err.message);
+    // Mesmo em erro interno, não vaza detalhe nenhum sobre a existência do e-mail.
+    return res.json(MENSAGEM_GENERICA);
+  }
+});
+
+// Conclusão da recuperação: troca a senha usando o token recebido por
+// e-mail (válido por 1h, uso único).
+app.post('/api/auth/redefinir-senha', express.json({ limit: '5kb' }), async (req, res) => {
+  try {
+    const { token, novaSenha } = req.body || {};
+    if (typeof token !== 'string' || !token) {
+      return res.status(400).json({ erro: 'Link de recuperação inválido.' });
+    }
+    await redefinirSenhaComToken(token, novaSenha);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao redefinir senha:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Tela de Perfil: atualizar dados pessoais e preferências.
+app.put('/api/auth/perfil', exigirAutenticacao, express.json({ limit: '10kb' }), async (req, res) => {
+  try {
+    const { nome, instituicao, cargo, notificacoesEmail, idioma } = req.body || {};
+    const usuario = await atualizarPerfil(req.usuarioId, { nome, instituicao, cargo, notificacoesEmail, idioma });
+    return res.json({ usuario });
+  } catch (err) {
+    console.error('Erro ao atualizar perfil:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Tela de Perfil: trocar a senha estando logado (exige a senha atual).
+app.post('/api/auth/alterar-senha', exigirAutenticacao, express.json({ limit: '5kb' }), async (req, res) => {
+  try {
+    const { senhaAtual, novaSenha } = req.body || {};
+    await alterarSenha(req.usuarioId, senhaAtual, novaSenha);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao alterar senha:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Zona de risco do Perfil: exclusão definitiva da conta.
+app.delete('/api/auth/conta', exigirAutenticacao, async (req, res) => {
+  try {
+    await excluirUsuario(req.usuarioId);
+    limparCookieSessao(req, res);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao excluir conta:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+/* ================================================================== */
+/* ======================== DADOS DO APLICATIVO ====================== */
+/* ================================================================== */
+// A partir daqui, toda rota exige sessão válida — ninguém acessa banco de
+// questões, montagem de provas ou upload sem estar logado.
+app.use('/api/questoes', exigirAutenticacao);
+app.use('/api/provas', exigirAutenticacao);
 
 // Salva o texto revisado pelo professor no Cloud Firestore.
 app.post('/api/questoes', express.json(), async (req, res) => {

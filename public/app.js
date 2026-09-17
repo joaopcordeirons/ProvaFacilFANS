@@ -96,7 +96,9 @@ async function pedirJson(caminho, opcoes) {
 
 /* ---------------------------------------------------------------- navegação */
 
-const VIEWS = { painel: 'viewPainel', banco: 'viewBanco', montar: 'viewMontar', revisao: 'viewRevisao' };
+const VIEWS = {
+  painel: 'viewPainel', banco: 'viewBanco', montar: 'viewMontar', revisao: 'viewRevisao', perfil: 'viewPerfil',
+};
 
 function mostrarView(nome) {
   Object.entries(VIEWS).forEach(([chave, id]) => {
@@ -111,6 +113,7 @@ function mostrarView(nome) {
   if (nome === 'painel') window.Painel?.renderizar();
   if (nome === 'montar') window.MontagemProva?.renderizarMontagem();
   if (nome === 'revisao') window.MontagemProva?.renderizarRevisao();
+  if (nome === 'perfil') window.Perfil?.renderizar();
 }
 
 document.querySelectorAll('.nav-item[data-ir-para]').forEach((botao) => {
@@ -987,13 +990,68 @@ btnVerificarEmail.addEventListener('click', async () => {
   }
 });
 
+/* -------------------------------------------------------------- sessão/usuário */
+
+const EstadoUsuario = { atual: null };
+
+function iniciais(nome) {
+  const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
+  if (!partes.length) return '··';
+  const primeira = partes[0][0] || '';
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : '';
+  return (primeira + ultima).toUpperCase();
+}
+
+function rotuloPerfil(perfil) {
+  return perfil === 'direcao' ? 'Direção' : 'Professor';
+}
+
+// Preenche o avatar/nome da sidebar e do topo do painel com os dados do
+// usuário autenticado (chega uma única vez, na inicialização).
+function aplicarUsuarioNaInterface(usuario) {
+  const legenda = [rotuloPerfil(usuario.perfil), usuario.cargo || null].filter(Boolean).join(' · ');
+  document.querySelectorAll('#avatarSidebar, #avatarTopo').forEach((el) => {
+    el.textContent = iniciais(usuario.nome);
+  });
+  const nomeEl = document.getElementById('contaNomeSidebar');
+  const legendaEl = document.getElementById('contaLegendaSidebar');
+  if (nomeEl) nomeEl.textContent = usuario.nome;
+  if (legendaEl) legendaEl.textContent = legenda || rotuloPerfil(usuario.perfil);
+  const avatarTopo = document.getElementById('avatarTopo');
+  if (avatarTopo) avatarTopo.title = usuario.nome;
+
+  // Sugestão inicial do campo "Professor(a)" na revisão da prova — o
+  // usuário pode alterar livremente antes de gerar o PDF.
+  const campoProfessor = document.getElementById('campoProfessor');
+  if (campoProfessor && !campoProfessor.value) campoProfessor.value = usuario.nome;
+}
+
+async function carregarSessao() {
+  try {
+    const { usuario } = await pedirJson('/api/auth/me');
+    EstadoUsuario.atual = usuario;
+    aplicarUsuarioNaInterface(usuario);
+  } catch (_) {
+    window.location.href = '/login.html';
+  }
+}
+
+document.getElementById('btnSair')?.addEventListener('click', async () => {
+  try {
+    await pedirJson('/api/auth/logout', { method: 'POST' });
+  } finally {
+    window.location.href = '/login.html';
+  }
+});
+
 /* ------------------------------------------------------------- inicialização */
 
 Estado.selecionadas = lerSelecaoSalva();
 
-// Superfície usada por montarProva.js.
+// Superfície usada por montarProva.js e perfil.js.
 window.App = {
   Estado,
+  EstadoUsuario,
   API_BASE,
   escapeHtml,
   formatarPontos,
@@ -1013,4 +1071,5 @@ window.App = {
   abrirDrawer,
 };
 
+carregarSessao();
 carregarQuestoes();

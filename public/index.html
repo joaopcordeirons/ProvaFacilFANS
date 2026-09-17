@@ -29,17 +29,20 @@
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="1.5" width="11" height="13" rx="1.2"/><path d="M5 5h6M5 8h6M5 11h3.5"/></svg>
           Montar prova
         </button>
-        <button type="button" class="nav-item" disabled title="Ainda não implementado">
+        <button type="button" class="nav-item" data-ir-para="perfil">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="5.2" r="2.7"/><path d="M2.5 14c0-2.8 2.5-4.7 5.5-4.7s5.5 1.9 5.5 4.7"/></svg>
           Perfil
         </button>
       </nav>
       <div class="sidebar-footer">
-        <div class="avatar">CE</div>
-        <div>
-          <div class="conta-nome">Carlos Eduardo</div>
-          <div class="conta-legenda">Professor · Eng. Software</div>
+        <div class="avatar" id="avatarSidebar">··</div>
+        <div style="flex:1; min-width:0;">
+          <div class="conta-nome" id="contaNomeSidebar">—</div>
+          <div class="conta-legenda" id="contaLegendaSidebar">—</div>
         </div>
+        <button type="button" class="fechar-drawer" id="btnSair" title="Sair" aria-label="Sair">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2H3.5A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14H6M10.5 11.5 14 8l-3.5-3.5M14 8H6"/></svg>
+        </button>
       </div>
     </aside>
 
@@ -52,7 +55,7 @@
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
             <input type="search" id="buscaPainel" placeholder="Buscar provas ou questões">
           </label>
-          <div class="avatar" title="Carlos Eduardo">CE</div>
+          <div class="avatar" id="avatarTopo" title="">··</div>
         </div>
       </header>
 
@@ -190,6 +193,139 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
       </section>
     </main>
 
+    <!-- ===================== TELA 04 · PERFIL ===================== -->
+    <main class="main main-larga oculto" id="viewPerfil">
+      <header class="main-header">
+        <h1>Perfil</h1>
+      </header>
+      <p class="subtitle">Gerencie suas informações pessoais e preferências.</p>
+
+      <div class="panel perfil-cabecalho">
+        <div class="avatar-grande" id="perfilAvatar">··</div>
+        <div>
+          <h2 id="perfilNomeCabecalho">—</h2>
+          <div class="legenda" id="perfilLegendaCabecalho">—</div>
+        </div>
+      </div>
+
+      <div class="perfil-grid">
+        <!-- Coluna esquerda -->
+        <div>
+          <section class="perfil-secao">
+            <h3 class="perfil-secao-titulo">Informações pessoais</h3>
+            <p class="perfil-secao-legenda">Atualize seus dados de identificação e contato.</p>
+            <div class="panel">
+              <form id="formPerfil">
+                <div class="campos-lado-a-lado">
+                  <label class="campo">Nome completo<input type="text" id="perfilNome" required></label>
+                  <label class="campo">E-mail<input type="email" id="perfilEmail" disabled></label>
+                </div>
+                <div class="campos-lado-a-lado">
+                  <label class="campo">Instituição<input type="text" id="perfilInstituicao"></label>
+                  <label class="campo">Cargo<input type="text" id="perfilCargo"></label>
+                </div>
+                <button type="submit" class="btn-escuro" id="btnSalvarPerfil">Salvar alterações</button>
+                <div class="status" id="statusPerfil"></div>
+              </form>
+            </div>
+          </section>
+
+          <section class="perfil-secao">
+            <h3 class="perfil-secao-titulo">Zona de risco</h3>
+            <p class="perfil-secao-legenda">Ações permanentes da conta.</p>
+            <div class="linha-perigo">
+              <div>
+                <div class="rotulo">Excluir minha conta</div>
+                <div class="descricao">Esta ação não pode ser desfeita.</div>
+              </div>
+              <button type="button" class="btn-perigo" id="btnAbrirExclusao">Excluir conta</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Coluna direita -->
+        <div>
+          <section class="perfil-secao">
+            <h3 class="perfil-secao-titulo">Segurança</h3>
+            <p class="perfil-secao-legenda">Mantenha sua conta protegida.</p>
+            <div class="panel">
+              <div class="linha-config">
+                <div>
+                  <div class="rotulo">Senha</div>
+                  <div class="descricao">Altere periodicamente para manter a conta segura.</div>
+                </div>
+                <button type="button" class="btn-secundario" id="btnAbrirAlterarSenha">Alterar senha</button>
+              </div>
+              <div class="linha-config">
+                <div>
+                  <div class="rotulo">Autenticação em duas etapas</div>
+                  <div class="descricao">Em breve.</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" disabled>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="perfil-secao">
+            <h3 class="perfil-secao-titulo">Preferências</h3>
+            <p class="perfil-secao-legenda">Personalize sua experiência no ProvaFácil.</p>
+            <div class="panel">
+              <div class="linha-config">
+                <div>
+                  <div class="rotulo">Notificações por e-mail</div>
+                  <div class="descricao">Receber atualizações sobre provas e aprovações.</div>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="perfilNotificacoes">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="linha-config">
+                <div class="rotulo">Idioma</div>
+                <select id="perfilIdioma" class="campo-select">
+                  <option value="pt-BR">Português (Brasil)</option>
+                </select>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===================== MODAL: ALTERAR SENHA ===================== -->
+    <div class="modal-overlay oculto" id="modalAlterarSenha">
+      <div class="modal-caixa">
+        <h3>Alterar senha</h3>
+        <p>Informe sua senha atual e a nova senha desejada.</p>
+        <form id="formAlterarSenha">
+          <label class="campo">Senha atual<input type="password" id="senhaAtualCampo" required></label>
+          <label class="campo">Nova senha<input type="password" id="senhaNovaCampo" required minlength="8"></label>
+          <label class="campo">Confirmar nova senha<input type="password" id="senhaNovaConfirmarCampo" required minlength="8"></label>
+          <div class="status" id="statusAlterarSenha"></div>
+          <div class="modal-acoes">
+            <button type="button" class="btn-secundario" id="btnCancelarAlterarSenha">Cancelar</button>
+            <button type="submit" class="btn-escuro" id="btnConfirmarAlterarSenha">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===================== MODAL: EXCLUIR CONTA ===================== -->
+    <div class="modal-overlay oculto" id="modalExcluirConta">
+      <div class="modal-caixa">
+        <h3>Excluir conta</h3>
+        <p>Essa ação é permanente e não pode ser desfeita. Sua conta e sessão serão encerradas imediatamente. Deseja continuar?</p>
+        <div class="status" id="statusExcluirConta"></div>
+        <div class="modal-acoes">
+          <button type="button" class="btn-secundario" id="btnCancelarExclusao">Cancelar</button>
+          <button type="button" class="btn-perigo" id="btnConfirmarExclusao">Excluir definitivamente</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== DRAWER: ADICIONAR QUESTÃO ===================== -->
     <div class="drawer-overlay oculto" id="drawerOverlay"></div>
     <aside class="drawer oculto" id="drawer">
@@ -276,5 +412,6 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
   <script src="app.js"></script>
   <script src="painel.js"></script>
   <script src="montarProva.js"></script>
+  <script src="perfil.js"></script>
 </body>
 </html>
