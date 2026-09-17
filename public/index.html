@@ -100,7 +100,12 @@
       <div class="mestre-detalhe">
         <!-- Painel 1: filtros -->
         <section class="painel-filtros">
-          <div class="disciplina-atual">Engenharia de Software</div>
+          <div class="disciplina-atual" id="disciplinaAtual">Banco de Questões</div>
+
+          <div class="filtro-grupo oculto" id="grupoFiltroCurso">
+            <div class="filtro-rotulo">Curso</div>
+            <div id="filtrosCurso"></div>
+          </div>
 
           <div class="filtro-grupo">
             <div class="filtro-rotulo">Período</div>
@@ -135,7 +140,7 @@
       <header class="main-header passo">
         <div>
           <div class="passo-rotulo">Passo 2 de 3</div>
-          <h1>Montar a prova — <span id="tituloDisciplinaMontagem">Engenharia de Software</span></h1>
+          <h1>Montar a prova — <span id="tituloDisciplinaMontagem">Banco de Questões</span></h1>
         </div>
       </header>
 
@@ -151,8 +156,6 @@
           <div class="resumo-rotulo">Resumo da prova</div>
           <dl class="resumo-linhas">
             <div><dt>Questões selecionadas</dt><dd id="resumoSelecionadas">0</dd></div>
-            <div><dt>Período atual</dt><dd id="resumoAtuais">0 questões</dd></div>
-            <div><dt>Histórico</dt><dd id="resumoHistoricas">0 questões</dd></div>
             <div><dt>Pontuação total</dt><dd id="resumoPontos">0,0 pts</dd></div>
           </dl>
           <div class="resumo-nota" id="resumoNota">0,0 / 10,0</div>
@@ -181,13 +184,13 @@
 
         <aside class="resumo-prova">
           <div class="resumo-rotulo">Cabeçalho da prova</div>
-          <label class="campo">Avaliação de<input type="text" id="campoTitulo" value="Avaliação de Engenharia de Software"></label>
-          <label class="campo">Curso<input type="text" id="campoCurso" value="Engenharia de Software"></label>
-          <label class="campo">Período<input type="text" id="campoPeriodo" placeholder="5º período"></label>
+          <label class="campo">Avaliação de<input type="text" id="campoTitulo" value="Avaliação"></label>
+          <label class="campo">Curso<select id="campoCurso"></select></label>
+          <label class="campo">Período<select id="campoPeriodo"></select></label>
           <label class="campo">Etapa<input type="text" id="campoEtapa" placeholder="1ª"></label>
           <label class="campo">Data<input type="date" id="campoData"></label>
           <label class="campo">Valor da prova<input type="text" id="campoValorProva" value="10,0"></label>
-          <label class="campo">Professor(a)<input type="text" id="campoProfessor" value="Carlos Eduardo"></label>
+          <label class="campo">Professor(a)<input type="text" id="campoProfessor" value=""></label>
           <label class="campo">Orientações gerais (uma por linha)<textarea id="campoInstrucoes" rows="5">A avaliação deve ser realizada individualmente;
 Nesta prova não é admitida nenhuma forma de consulta a qualquer tipo material;
 Celulares e outros dispositivos de comunicação devem permanecer desligados e acondicionados debaixo das carteiras durante toda a duração da avaliação;
@@ -239,6 +242,10 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
                 <div class="campos-lado-a-lado">
                   <label class="campo">Instituição<input type="text" id="perfilInstituicao"></label>
                   <label class="campo">Cargo<input type="text" id="perfilCargo"></label>
+                </div>
+                <div class="campo oculto" id="blocoPerfilCursos">
+                  <span>Cursos que leciona</span>
+                  <div class="cursos-checklist" id="perfilCursosChecklist"></div>
                 </div>
                 <button type="submit" class="btn-escuro" id="btnSalvarPerfil">Salvar alterações</button>
                 <div class="status" id="statusPerfil"></div>

@@ -18,6 +18,35 @@ async function pedirJson(caminho, opcoes) {
   return dados;
 }
 
+/* ---------------------------------------------------- cursos (cadastro) */
+
+let cursosDisponiveis = [];
+
+async function carregarCursos() {
+  try {
+    const dados = await pedirJson('/api/constantes');
+    cursosDisponiveis = Array.isArray(dados.cursos) ? dados.cursos : [];
+  } catch (_) {
+    cursosDisponiveis = [];
+  }
+  const container = document.getElementById('cadastroCursosChecklist');
+  container.innerHTML = cursosDisponiveis.map((curso) => `
+    <label><input type="checkbox" value="${curso.replace(/"/g, '&quot;')}"> ${curso}</label>
+  `).join('');
+}
+
+function cursosMarcadosNoCadastro() {
+  return [...document.querySelectorAll('#cadastroCursosChecklist input:checked')].map((el) => el.value);
+}
+
+// O bloco de cursos só faz sentido pra Professor — Direção enxerga tudo.
+function atualizarBlocoCursosCadastro() {
+  const bloco = document.getElementById('blocoCadastroCursos');
+  const ehProfessor = perfilSelecionado('perfilSeletorCadastro') === 'professor';
+  bloco.classList.toggle('oculto', !ehProfessor);
+  if (!ehProfessor) document.getElementById('erroCadastroCursos').classList.add('oculto');
+}
+
 /* ------------------------------------------------------- navegação entre vistas */
 
 const VISTAS = ['vistaLogin', 'vistaCadastro', 'vistaEsqueci', 'vistaConfirmeEmail', 'vistaRedefinir', 'vistaVerificandoEmail'];
@@ -53,6 +82,13 @@ function perfilSelecionado(idContainer) {
 
 ligarSeletorPerfil('perfilSeletorLogin');
 ligarSeletorPerfil('perfilSeletorCadastro');
+
+// Mostra/esconde o checklist de cursos conforme o perfil escolhido no cadastro.
+document.querySelectorAll('#perfilSeletorCadastro .perfil-opcao').forEach((botao) => {
+  botao.addEventListener('click', atualizarBlocoCursosCadastro);
+});
+atualizarBlocoCursosCadastro();
+carregarCursos();
 
 /* ------------------------------------------------------------------- utilidades */
 
@@ -137,6 +173,15 @@ document.getElementById('formCadastro').addEventListener('submit', async (evento
     return;
   }
 
+  const perfil = perfilSelecionado('perfilSeletorCadastro');
+  const cursos = cursosMarcadosNoCadastro();
+  const erroCursosEl = document.getElementById('erroCadastroCursos');
+  if (perfil === 'professor' && !cursos.length) {
+    erroCursosEl.classList.remove('oculto');
+    return;
+  }
+  erroCursosEl.classList.add('oculto');
+
   btn.disabled = true;
   try {
     const email = document.getElementById('cadastroEmail').value.trim();
@@ -146,9 +191,10 @@ document.getElementById('formCadastro').addEventListener('submit', async (evento
         nome: document.getElementById('cadastroNome').value.trim(),
         email,
         senha,
-        perfil: perfilSelecionado('perfilSeletorCadastro'),
+        perfil,
         instituicao: document.getElementById('cadastroInstituicao').value.trim(),
         cargo: document.getElementById('cadastroCargo').value.trim(),
+        cursos,
       }),
     });
     abrirVistaConfirmeEmail(email);

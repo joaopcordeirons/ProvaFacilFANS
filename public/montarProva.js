@@ -10,6 +10,7 @@
     Estado, API_BASE, escapeHtml, formatarPontos, textoLimpo, resumir,
     rotuloPeriodo, estaSelecionada, alternarSelecao, salvarSelecao,
     questaoPorId, questoesSelecionadas, pontuacaoSelecionada, mostrarView,
+    EstadoUsuario, cursosDoUsuario, opcoesCurso, opcoesPeriodo,
   } = window.App;
 
   const PONTUACAO_ALVO = 10;
@@ -37,13 +38,9 @@
 
   function renderizarResumo() {
     const selecionadas = questoesSelecionadas();
-    const atuais = selecionadas.filter((questao) => questao.periodo !== 'historico').length;
     const pontos = pontuacaoSelecionada();
 
     document.getElementById('resumoSelecionadas').textContent = `${selecionadas.length} de ${Estado.questoes.length}`;
-    const plural = (quantidade) => `${quantidade} ${quantidade === 1 ? 'questão' : 'questões'}`;
-    document.getElementById('resumoAtuais').textContent = plural(atuais);
-    document.getElementById('resumoHistoricas').textContent = plural(selecionadas.length - atuais);
     document.getElementById('resumoPontos').textContent = `${formatarPontos(pontos)} pts`;
     document.getElementById('resumoNota').textContent = `${formatarPontos(pontos)} / ${formatarPontos(PONTUACAO_ALVO)}`;
 
@@ -66,8 +63,40 @@
     document.getElementById('btnContinuarRevisao').disabled = selecionadas.length === 0;
   }
 
+  /* --------------------------------------- cabeçalho da prova (curso/período) */
+
+  // Preenche o título e os selects de Curso/Período do cabeçalho da prova
+  // com base no(s) curso(s) do usuário logado. Só roda uma vez — depois
+  // disso é o professor quem decide os valores.
+  let cabecalhoPreparado = false;
+  function prepararCabecalhoProva() {
+    if (cabecalhoPreparado || !EstadoUsuario.atual) return;
+    const cursos = cursosDoUsuario();
+
+    const tituloDisciplinaEl = document.getElementById('tituloDisciplinaMontagem');
+    if (tituloDisciplinaEl) {
+      tituloDisciplinaEl.textContent = cursos.length === 1
+        ? cursos[0]
+        : (EstadoUsuario.atual.perfil === 'direcao' ? 'Todos os cursos' : 'Meus cursos');
+    }
+
+    const campoCursoEl = document.getElementById('campoCurso');
+    if (campoCursoEl) campoCursoEl.innerHTML = opcoesCurso(cursos[0]);
+
+    const campoPeriodoEl = document.getElementById('campoPeriodo');
+    if (campoPeriodoEl) campoPeriodoEl.innerHTML = opcoesPeriodo();
+
+    const campoTituloEl = document.getElementById('campoTitulo');
+    if (campoTituloEl && (!campoTituloEl.value || campoTituloEl.value === 'Avaliação')) {
+      campoTituloEl.value = cursos.length === 1 ? `Avaliação de ${cursos[0]}` : 'Avaliação';
+    }
+
+    cabecalhoPreparado = true;
+  }
+
   function renderizarMontagem() {
     if (!listaMontagemEl) return;
+    prepararCabecalhoProva();
 
     const questoes = questoesOrdenadasParaMontagem();
     contadorDisponiveisEl.textContent = `(${questoes.length})`;
@@ -81,7 +110,7 @@
               <div class="item-cabecalho">
                 <span class="codigo">${escapeHtml(questao.codigo)}</span>
                 <span class="pontos">${formatarPontos(questao.valor)} PTS</span>
-                <span class="item-origem">${escapeHtml(rotuloPeriodo(questao))}</span>
+                <span class="item-origem">${escapeHtml(rotuloPeriodo(questao))}${cursosDoUsuario().length > 1 ? ` · ${escapeHtml(questao.curso || '—')}` : ''}</span>
               </div>
               <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 150) || '(vazio)')}</p>
             </div>
@@ -113,6 +142,7 @@
 
   function renderizarRevisao() {
     if (!listaRevisaoEl) return;
+    prepararCabecalhoProva();
 
     const selecionadas = questoesSelecionadas();
     contadorRevisaoEl.textContent = `(${selecionadas.length} · ${formatarPontos(pontuacaoSelecionada())} pts)`;

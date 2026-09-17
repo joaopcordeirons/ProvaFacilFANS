@@ -5,6 +5,7 @@
 // FIREBASE_PRIVATE_KEY no ambiente de execução.
 
 const admin = require('firebase-admin');
+const { CURSOS_VALIDOS, PERIODOS_VALIDOS } = require('./constantes');
 
 let firestore = null;
 let inicializacaoTentada = false;
@@ -53,7 +54,10 @@ function obterFirestore() {
 }
 
 function exigirFirestore() {
-  const banco = obterFirestore();
+  // Chama via module.exports (não a função local direto) para que testes
+  // consigam substituir obterFirestore por um Firestore falso sem precisar
+  // de credenciais reais — não muda nada em produção.
+  const banco = module.exports.obterFirestore();
   if (!banco) {
     const erro = new Error(
       'Firebase não configurado. Defina FIREBASE_SERVICE_ACCOUNT_JSON ou FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY.'
@@ -66,9 +70,20 @@ function exigirFirestore() {
 
 // Metadados usados pelas telas de Banco de Questões (filtros por período
 // e assunto) e de Montagem da prova (valor em pontos de cada questão).
-// Ficam com padrão sempre preenchido para que questões salvas antes
-// dessas telas existirem continuem aparecendo nos filtros.
-const PERIODOS_VALIDOS = ['atual', 'historico'];
+function validarCurso(valor) {
+  if (!CURSOS_VALIDOS.includes(valor)) {
+    throw Object.assign(new Error('Curso inválido ou não informado.'), { statusCode: 400 });
+  }
+  return valor;
+}
+
+function validarPeriodo(valor) {
+  const numero = Number.parseInt(valor, 10);
+  if (!PERIODOS_VALIDOS.includes(numero)) {
+    throw Object.assign(new Error('Período inválido — escolha de 1º a 10º.'), { statusCode: 400 });
+  }
+  return numero;
+}
 
 function normalizarMetadados(dados = {}) {
   const valor = Number(dados.valor);
@@ -76,7 +91,6 @@ function normalizarMetadados(dados = {}) {
   const assunto = typeof dados.assunto === 'string' ? dados.assunto.trim().slice(0, 60) : '';
   return {
     assunto: assunto || 'Outros',
-    periodo: PERIODOS_VALIDOS.includes(dados.periodo) ? dados.periodo : 'atual',
     ano: Number.isFinite(ano) && ano >= 1990 && ano <= 2100 ? ano : null,
     valor: Number.isFinite(valor) && valor > 0 && valor <= 100
       ? Math.round(valor * 100) / 100
@@ -86,12 +100,17 @@ function normalizarMetadados(dados = {}) {
 
 async function criarQuestao(dados) {
   const banco = exigirFirestore();
+  const curso = validarCurso(dados.curso);
+  const periodo = validarPeriodo(dados.periodo);
   const agora = admin.firestore.FieldValue.serverTimestamp();
   const referencia = await banco.collection('questoes').add({
     texto: dados.texto,
     conteudoHtml: sanitizarHtml(dados.conteudoHtml || ''),
+    curso,
+    periodo,
     ...normalizarMetadados(dados),
     usadaEm: 0,
+    criadoPorId: dados.criadoPorId || null,
     tipoOrigem: dados.tipoOrigem || 'manual',
     nomeArquivo: dados.nomeArquivo || null,
     paginas: Number.isFinite(dados.paginas) ? dados.paginas : null,
@@ -103,25 +122,48 @@ async function criarQuestao(dados) {
   return { id: referencia.id };
 }
 
-async function listarQuestoes(limite = 50) {
+// cursosFiltro:
+//  - null/undefined -> sem filtro (usado pela Direção, que vê tudo)
+//  - array de cursos -> só questões desses cursos (usado pelo professor,
+//    com os cursos em que ele está cadastrado como docente)
+async function listarQuestoes(limite = 50, cursosFiltro = null) {
   const banco = exigirFirestore();
-  const snapshot = await banco.collection('questoes')
-    .orderBy('criadoEm', 'desc')
-    .limit(limite)
-    .get();
 
-  return snapshot.docs.map(formatarQuestao);
+  if (!cursosFiltro) {
+    const snapshot = await banco.collection('questoes')
+      .orderBy('criadoEm', 'desc')
+      .limit(limite)
+      .get();
+    return snapshot.docs.map(formatarQuestao);
+  }
+
+  if (!cursosFiltro.length) return [];
+
+  // O Firestore não deixa combinar where('curso','in',...) com
+  // orderBy('criadoEm') sem um índice composto — em vez de depender
+  // disso, busca tudo do(s) curso(s) e ordena em memória. Os bancos de
+  // questões de uma disciplina não chegam a ficar grandes o bastante
+  // pra isso pesar.
+  const snapshot = await banco.collection('questoes')
+    .where('curso', 'in', cursosFiltro.slice(0, 10))
+    .get();
+  return snapshot.docs
+    .map(formatarQuestao)
+    .sort((a, b) => new Date(b.criadoEm || 0) - new Date(a.criadoEm || 0))
+    .slice(0, limite);
 }
 
 // Converte o documento do Firestore no formato consumido pela interface,
-// preenchendo os metadados novos (assunto/período/valor) quando o
-// documento é antigo e não os tem.
+// preenchendo os metadados novos (assunto/valor) quando o documento é
+// antigo e não os tem.
 function formatarQuestao(doc) {
   const dados = doc.data();
   return {
     id: doc.id,
     ...dados,
     ...normalizarMetadados(dados),
+    curso: CURSOS_VALIDOS.includes(dados.curso) ? dados.curso : null,
+    periodo: PERIODOS_VALIDOS.includes(dados.periodo) ? dados.periodo : null,
     usadaEm: Number.isFinite(dados.usadaEm) ? dados.usadaEm : 0,
     criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
     atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
@@ -135,8 +177,17 @@ function validarId(id) {
   return id;
 }
 
+// Usado pelo server.js para checar permissão (o curso da questão precisa
+// estar entre os cursos do professor logado) antes de editar/excluir.
+async function buscarQuestaoPorId(id) {
+  validarId(id);
+  const banco = exigirFirestore();
+  const doc = await banco.collection('questoes').doc(id).get();
+  return doc.exists ? formatarQuestao(doc) : null;
+}
+
 // Edição feita no painel de detalhe do Banco de Questões: o professor
-// ajusta enunciado, assunto, período e valor sem precisar recadastrar.
+// ajusta enunciado, assunto, período, curso e valor sem precisar recadastrar.
 async function atualizarQuestao(id, dados) {
   validarId(id);
   const banco = exigirFirestore();
@@ -150,6 +201,8 @@ async function atualizarQuestao(id, dados) {
     ...normalizarMetadados({ ...documento.data(), ...dados }),
     atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
   };
+  if (dados.curso !== undefined) atualizacao.curso = validarCurso(dados.curso);
+  if (dados.periodo !== undefined) atualizacao.periodo = validarPeriodo(dados.periodo);
   if (typeof dados.texto === 'string' && dados.texto.trim()) {
     atualizacao.texto = dados.texto.trim();
   }
@@ -218,10 +271,11 @@ async function registrarProva(dados) {
   const banco = exigirFirestore();
   const agora = admin.firestore.FieldValue.serverTimestamp();
   const questaoIds = [...new Set(dados.questaoIds || [])];
+  const curso = validarCurso(dados.curso);
 
   const prova = {
     titulo: String(dados.titulo || 'Avaliação').slice(0, 160),
-    curso: String(dados.curso || '').slice(0, 80),
+    curso,
     periodo: String(dados.periodo || '').slice(0, 40),
     etapa: String(dados.etapa || '').slice(0, 20),
     data: String(dados.data || '').slice(0, 20),
@@ -230,6 +284,7 @@ async function registrarProva(dados) {
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
     status: 'rascunho',
     formatos: dados.formato ? [dados.formato] : [],
+    criadoPorId: dados.criadoPorId || null,
     criadoEm: agora,
     atualizadoEm: agora,
   };
@@ -257,23 +312,46 @@ async function registrarProva(dados) {
   return { id: referencia.id };
 }
 
-async function listarProvas(limite = 20) {
+async function listarProvas(limite = 20, cursosFiltro = null) {
   const banco = exigirFirestore();
-  const snapshot = await banco.collection('provas')
-    .orderBy('atualizadoEm', 'desc')
-    .limit(limite)
-    .get();
 
-  return snapshot.docs.map((doc) => {
-    const dados = doc.data();
-    return {
-      id: doc.id,
-      ...dados,
-      status: STATUS_PROVA.includes(dados.status) ? dados.status : 'rascunho',
-      criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
-      atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
-    };
-  });
+  if (!cursosFiltro) {
+    const snapshot = await banco.collection('provas')
+      .orderBy('atualizadoEm', 'desc')
+      .limit(limite)
+      .get();
+    return snapshot.docs.map(formatarProva);
+  }
+
+  if (!cursosFiltro.length) return [];
+
+  const snapshot = await banco.collection('provas')
+    .where('curso', 'in', cursosFiltro.slice(0, 10))
+    .get();
+  return snapshot.docs
+    .map(formatarProva)
+    .sort((a, b) => new Date(b.atualizadoEm || 0) - new Date(a.atualizadoEm || 0))
+    .slice(0, limite);
+}
+
+function formatarProva(doc) {
+  const dados = doc.data();
+  return {
+    id: doc.id,
+    ...dados,
+    status: STATUS_PROVA.includes(dados.status) ? dados.status : 'rascunho',
+    criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
+    atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
+  };
+}
+
+// Usado pelo server.js para checar permissão (o curso da prova precisa
+// estar entre os cursos do professor logado) antes de mudar o status.
+async function buscarProvaPorId(id) {
+  validarId(id);
+  const banco = exigirFirestore();
+  const doc = await banco.collection('provas').doc(id).get();
+  return doc.exists ? formatarProva(doc) : null;
 }
 
 // O fluxo de aprovação acontece fora do sistema (a direção assina o
@@ -306,10 +384,12 @@ module.exports = {
   listarQuestoes,
   atualizarQuestao,
   excluirQuestao,
+  buscarQuestaoPorId,
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
   registrarProva,
   listarProvas,
+  buscarProvaPorId,
   atualizarStatusProva,
   sanitizarHtml,
 };

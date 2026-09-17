@@ -19,10 +19,12 @@ const {
   listarQuestoes,
   atualizarQuestao,
   excluirQuestao,
+  buscarQuestaoPorId,
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
   registrarProva,
   listarProvas,
+  buscarProvaPorId,
   atualizarStatusProva,
 } = require('./firebase');
 const {
@@ -48,6 +50,7 @@ const {
 const { montarPdfProva } = require('./provaPdf');
 const { montarDocxProva } = require('./provaDocx');
 const { nomeArquivo } = require('./modeloProva');
+const { CURSOS_VALIDOS, PERIODOS_VALIDOS } = require('./constantes');
 
 const app = express();
 const PORT = process.env.PORT || 80;
@@ -121,6 +124,14 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', mensagem: 'API de extração de PDF no ar.' });
 });
 
+// Lista fixa de cursos e períodos — usada pelos formulários de
+// cadastro/perfil (seleção de curso) e pelo Banco de Questões/Montagem
+// de prova (seleção de período). Pública porque a tela de cadastro
+// precisa dela antes do login existir.
+app.get('/api/constantes', (req, res) => {
+  res.json({ cursos: CURSOS_VALIDOS, periodos: PERIODOS_VALIDOS });
+});
+
 /* ================================================================== */
 /* ============================ AUTENTICAÇÃO ========================= */
 /* ================================================================== */
@@ -139,8 +150,8 @@ function origemDoPedido(req) {
 // liberado depois que o link enviado por e-mail for confirmado.
 app.post('/api/auth/registrar', express.json({ limit: '20kb' }), async (req, res) => {
   try {
-    const { nome, email, senha, perfil, instituicao, cargo } = req.body || {};
-    const { usuario, tokenVerificacao } = await criarUsuario({ nome, email, senha, perfil, instituicao, cargo });
+    const { nome, email, senha, perfil, instituicao, cargo, cursos } = req.body || {};
+    const { usuario, tokenVerificacao } = await criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos });
 
     const link = `${origemDoPedido(req)}/login.html?verificar=${tokenVerificacao}`;
     await enviarEmailVerificacao(usuario.email, usuario.nome, link);
@@ -290,8 +301,8 @@ app.post('/api/auth/redefinir-senha', express.json({ limit: '5kb' }), async (req
 // Tela de Perfil: atualizar dados pessoais e preferências.
 app.put('/api/auth/perfil', exigirAutenticacao, express.json({ limit: '10kb' }), async (req, res) => {
   try {
-    const { nome, instituicao, cargo, notificacoesEmail, idioma } = req.body || {};
-    const usuario = await atualizarPerfil(req.usuarioId, { nome, instituicao, cargo, notificacoesEmail, idioma });
+    const { nome, instituicao, cargo, notificacoesEmail, idioma, cursos } = req.body || {};
+    const usuario = await atualizarPerfil(req.usuarioId, { nome, instituicao, cargo, notificacoesEmail, idioma, cursos });
     return res.json({ usuario });
   } catch (err) {
     console.error('Erro ao atualizar perfil:', err.message);
@@ -331,20 +342,48 @@ app.delete('/api/auth/conta', exigirAutenticacao, async (req, res) => {
 app.use('/api/questoes', exigirAutenticacao);
 app.use('/api/provas', exigirAutenticacao);
 
+// Carrega o usuário completo (perfil + cursos) a cada request nessas
+// rotas — em vez de confiar só no que está no cookie — para que uma
+// mudança de curso feita agora mesmo no Perfil já valha na hora, sem
+// precisar deslogar. Direção sempre tem acesso irrestrito (cursosPermitidos
+// null = sem filtro); professor só aos cursos em que está cadastrado.
+async function carregarUsuarioCompleto(req, res, next) {
+  try {
+    const usuario = await buscarUsuarioPorId(req.usuarioId);
+    if (!usuario) return res.status(401).json({ erro: 'Sessão inválida.' });
+    req.usuario = usuario;
+    req.cursosPermitidos = usuario.perfil === 'direcao' ? null : usuario.cursos;
+    return next();
+  } catch (err) {
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+}
+app.use('/api/questoes', carregarUsuarioCompleto);
+app.use('/api/provas', carregarUsuarioCompleto);
+
+// Confere se o professor tem permissão sobre um curso específico
+// (direção sempre tem). Usado antes de criar/editar/excluir.
+function podeUsarCurso(req, curso) {
+  return req.cursosPermitidos === null || req.cursosPermitidos.includes(curso);
+}
+
 // Salva o texto revisado pelo professor no Cloud Firestore.
 app.post('/api/questoes', express.json(), async (req, res) => {
   try {
     const {
       texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
-      assunto, periodo, ano, valor,
+      assunto, periodo, ano, valor, curso,
     } = req.body || {};
     if (typeof texto !== 'string' || !texto.trim()) {
       return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
     }
+    if (!podeUsarCurso(req, curso)) {
+      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+    }
 
     const questao = await criarQuestao({
       texto: texto.trim(), conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
-      assunto, periodo, ano, valor,
+      assunto, periodo, ano, valor, curso, criadoPorId: req.usuarioId,
     });
     return res.status(201).json(questao);
   } catch (err) {
@@ -353,14 +392,15 @@ app.post('/api/questoes', express.json(), async (req, res) => {
   }
 });
 
-// Lista as questões mais recentes salvas no Cloud Firestore.
+// Lista as questões mais recentes salvas no Cloud Firestore — só do(s)
+// curso(s) do professor logado; sem filtro para a Direção.
 app.get('/api/questoes', async (req, res) => {
   try {
     const limiteInformado = Number.parseInt(req.query.limite, 10);
     const limite = Number.isFinite(limiteInformado)
       ? Math.min(Math.max(limiteInformado, 1), 100)
       : 50;
-    return res.json({ questoes: await listarQuestoes(limite) });
+    return res.json({ questoes: await listarQuestoes(limite, req.cursosPermitidos) });
   } catch (err) {
     console.error('Erro ao listar questões:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
@@ -421,12 +461,22 @@ app.post('/api/questoes/corrigir-com-ia', express.json({ limit: '1mb' }), async 
 // enunciado, assunto, período/ano e valor em pontos.
 app.put('/api/questoes/:id', express.json({ limit: '1mb' }), async (req, res) => {
   try {
-    const { texto, conteudoHtml, assunto, periodo, ano, valor } = req.body || {};
+    const { texto, conteudoHtml, assunto, periodo, ano, valor, curso } = req.body || {};
     if (texto !== undefined && (typeof texto !== 'string' || !texto.trim())) {
       return res.status(400).json({ erro: 'O campo "texto" não pode ficar vazio.' });
     }
+
+    const existente = await buscarQuestaoPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Questão não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona no curso dessa questão.' });
+    }
+    if (curso !== undefined && !podeUsarCurso(req, curso)) {
+      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+    }
+
     return res.json(await atualizarQuestao(req.params.id, {
-      texto, conteudoHtml, assunto, periodo, ano, valor,
+      texto, conteudoHtml, assunto, periodo, ano, valor, curso,
     }));
   } catch (err) {
     console.error('Erro ao atualizar questão:', err.message);
@@ -480,7 +530,17 @@ async function gerarProva(req, res, formato) {
       return res.status(400).json({ erro: 'Uma prova pode ter no máximo 60 questões.' });
     }
 
+    const cursoProva = corpo.curso || corpo.disciplina;
+    if (!podeUsarCurso(req, cursoProva)) {
+      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+    }
+
     const questoes = await buscarQuestoesPorIds(questaoIds);
+    const foraDoCurso = questoes.find((questao) => !podeUsarCurso(req, questao.curso));
+    if (foraDoCurso) {
+      return res.status(403).json({ erro: 'Uma ou mais questões selecionadas não pertencem a um curso que você leciona.' });
+    }
+
     const dados = dadosDaProva(corpo, questoes);
     const arquivo = formato === 'docx'
       ? montarDocxProva(dados)
@@ -500,6 +560,7 @@ async function gerarProva(req, res, formato) {
         formato,
         questaoIds: questoes.map((questao) => questao.id),
         pontuacaoTotal: questoes.reduce((soma, questao) => soma + Number(questao.valor || 0), 0),
+        criadoPorId: req.usuarioId,
       });
     } catch (err) {
       console.warn('Não foi possível registrar a prova no painel:', err.message);
@@ -527,7 +588,7 @@ app.get('/api/provas', async (req, res) => {
     const limite = Number.isFinite(limiteInformado)
       ? Math.min(Math.max(limiteInformado, 1), 50)
       : 20;
-    return res.json({ provas: await listarProvas(limite) });
+    return res.json({ provas: await listarProvas(limite, req.cursosPermitidos) });
   } catch (err) {
     console.error('Erro ao listar provas:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
@@ -538,6 +599,11 @@ app.get('/api/provas', async (req, res) => {
 // aprovada pela direção).
 app.patch('/api/provas/:id', express.json(), async (req, res) => {
   try {
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona no curso dessa prova.' });
+    }
     return res.json(await atualizarStatusProva(req.params.id, (req.body || {}).status));
   } catch (err) {
     console.error('Erro ao atualizar a prova:', err.message);
@@ -547,6 +613,11 @@ app.patch('/api/provas/:id', express.json(), async (req, res) => {
 
 app.delete('/api/questoes/:id', async (req, res) => {
   try {
+    const existente = await buscarQuestaoPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Questão não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona no curso dessa questão.' });
+    }
     return res.json(await excluirQuestao(req.params.id));
   } catch (err) {
     console.error('Erro ao excluir questão:', err.message);

@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const admin = require('firebase-admin');
 const { obterFirestore } = require('./firebase');
+const { CURSOS_VALIDOS } = require('./constantes');
 
 const CUSTO_HASH = 12; // fator de custo do bcrypt — 12 é o recomendado atual
 const VALIDADE_TOKEN_RECUPERACAO_MS = 60 * 60 * 1000; // 1 hora
@@ -55,6 +56,24 @@ function validarPerfil(perfil) {
   }
 }
 
+// Professor(a) precisa lecionar em pelo menos um curso (pode ser vários —
+// é isso que decide em quais bancos de questões a conta consegue
+// adicionar/ver questões). Direção não seleciona curso: enxerga todos.
+function normalizarCursos(cursos, perfil) {
+  if (perfil === 'direcao') return [];
+
+  const lista = Array.isArray(cursos) ? cursos : [];
+  const unicos = [...new Set(lista.map((c) => String(c || '').trim()))].filter(Boolean);
+  const invalidos = unicos.filter((c) => !CURSOS_VALIDOS.includes(c));
+  if (invalidos.length) {
+    throw erro(`Curso inválido: ${invalidos.join(', ')}.`, 400);
+  }
+  if (!unicos.length) {
+    throw erro('Selecione pelo menos um curso que você leciona.', 400);
+  }
+  return unicos;
+}
+
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -73,6 +92,7 @@ function formatarUsuarioPublico(doc) {
     notificacoesEmail: dados.notificacoesEmail !== false,
     idioma: dados.idioma || 'pt-BR',
     emailVerificado: Boolean(dados.emailVerificado),
+    cursos: Array.isArray(dados.cursos) ? dados.cursos : [],
     criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
   };
 }
@@ -92,7 +112,7 @@ async function buscarUsuarioPorIdBruto(id) {
   return doc.exists ? doc : null;
 }
 
-async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo }) {
+async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos }) {
   const nomeLimpo = String(nome || '').trim();
   if (!nomeLimpo) throw erro('Informe o nome completo.', 400);
 
@@ -100,6 +120,7 @@ async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo }) 
   validarEmail(emailLimpo);
   validarSenha(senha);
   validarPerfil(perfil);
+  const cursosValidados = normalizarCursos(cursos, perfil);
 
   const existente = await buscarUsuarioPorEmailBruto(emailLimpo);
   if (existente) {
@@ -118,6 +139,7 @@ async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo }) 
     perfil,
     instituicao: String(instituicao || '').trim().slice(0, 120),
     cargo: String(cargo || '').trim().slice(0, 80),
+    cursos: cursosValidados,
     notificacoesEmail: true,
     idioma: 'pt-BR',
     emailVerificado: false,
@@ -298,6 +320,9 @@ async function atualizarPerfil(id, dados) {
   }
   if (dados.idioma !== undefined) {
     atualizacao.idioma = String(dados.idioma || 'pt-BR').slice(0, 10);
+  }
+  if (dados.cursos !== undefined) {
+    atualizacao.cursos = normalizarCursos(dados.cursos, doc.data().perfil);
   }
 
   await doc.ref.update(atualizacao);

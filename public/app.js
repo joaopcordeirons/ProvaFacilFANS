@@ -13,9 +13,29 @@ const Estado = {
   questoes: [],                // tudo que veio do Firestore, na ordem do banco
   selecionadas: [],            // IDs escolhidos para a prova, na ordem de escolha
   detalheId: null,             // questão aberta no painel de detalhe
-  filtro: { periodo: 'todas', assunto: null, palavraChave: '', assunto_busca: '' },
+  filtro: { curso: null, periodo: 'todas', assunto: null, palavraChave: '', assunto_busca: '' },
   editando: false,
 };
+
+// Lista fixa de cursos/períodos, carregada uma vez de /api/constantes e
+// usada pelos seletores de curso e período em várias telas.
+const Constantes = { cursos: [], periodos: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] };
+
+async function carregarConstantes() {
+  try {
+    const dados = await pedirJson('/api/constantes');
+    Constantes.cursos = Array.isArray(dados.cursos) ? dados.cursos : [];
+    if (Array.isArray(dados.periodos) && dados.periodos.length) Constantes.periodos = dados.periodos;
+  } catch (_) { /* mantém os padrões acima */ }
+}
+
+// Cursos "em jogo" para o usuário logado: os que ele leciona (professor)
+// ou todos (direção). Várias telas usam isso pra montar seletores.
+function cursosDoUsuario() {
+  const usuario = EstadoUsuario.atual;
+  if (!usuario) return [];
+  return usuario.perfil === 'direcao' ? Constantes.cursos : (usuario.cursos || []);
+}
 
 /* ---------------------------------------------------------------- utilidades */
 
@@ -39,10 +59,19 @@ function resumir(texto, limite) {
 }
 
 function rotuloPeriodo(questao) {
-  if (questao.periodo === 'historico') {
-    return questao.ano ? `Histórico · ${questao.ano}` : 'Histórico';
-  }
-  return 'Período atual';
+  return Number.isFinite(questao.periodo) ? `${questao.periodo}º período` : 'Período não informado';
+}
+
+function opcoesPeriodo(selecionado) {
+  return Constantes.periodos.map((p) => `
+    <option value="${p}" ${String(p) === String(selecionado) ? 'selected' : ''}>${p}º período</option>
+  `).join('');
+}
+
+function opcoesCurso(selecionado) {
+  return cursosDoUsuario().map((c) => `
+    <option value="${escapeHtml(c)}" ${c === selecionado ? 'selected' : ''}>${escapeHtml(c)}</option>
+  `).join('');
 }
 
 // A seleção sobrevive a um F5 — o professor pode montar a prova em duas
@@ -143,6 +172,9 @@ window.addEventListener('resize', () => {
 
 /* -------------------------------------------- Banco de Questões (3 painéis) */
 
+const filtrosCursoEl = document.getElementById('filtrosCurso');
+const grupoFiltroCursoEl = document.getElementById('grupoFiltroCurso');
+const disciplinaAtualEl = document.getElementById('disciplinaAtual');
 const filtrosPeriodoEl = document.getElementById('filtrosPeriodo');
 const filtrosAssuntoEl = document.getElementById('filtrosAssunto');
 const listaQuestoesEl = document.getElementById('listaQuestoes');
@@ -151,11 +183,12 @@ const painelDetalheEl = document.getElementById('painelDetalhe');
 const buscaPalavraChaveEl = document.getElementById('buscaPalavraChave');
 const buscaAssuntoEl = document.getElementById('buscaAssunto');
 
-// Filtro do painel da esquerda (período/assunto) + as duas buscas do topo.
+// Filtro do painel da esquerda (curso/período/assunto) + as duas buscas do topo.
 function questoesFiltradas() {
-  const { periodo, assunto, palavraChave, assunto_busca: assuntoBusca } = Estado.filtro;
+  const { curso, periodo, assunto, palavraChave, assunto_busca: assuntoBusca } = Estado.filtro;
   return Estado.questoes.filter((questao) => {
-    if (periodo !== 'todas' && questao.periodo !== periodo) return false;
+    if (curso && questao.curso !== curso) return false;
+    if (periodo !== 'todas' && String(questao.periodo) !== String(periodo)) return false;
     if (assunto && questao.assunto !== assunto) return false;
     if (assuntoBusca && !String(questao.assunto || '').toLowerCase().includes(assuntoBusca)) return false;
     if (palavraChave && !textoLimpo(questao).toLowerCase().includes(palavraChave)) return false;
@@ -163,17 +196,54 @@ function questoesFiltradas() {
   });
 }
 
+// Título do painel + filtro de curso: só aparecem quando faz sentido —
+// professor com 1 curso só não precisa escolher nada, e o título já
+// mostra qual é.
+function renderizarCabecalhoCurso() {
+  const cursos = cursosDoUsuario();
+  disciplinaAtualEl.textContent = cursos.length === 1
+    ? cursos[0]
+    : (EstadoUsuario.atual?.perfil === 'direcao' ? 'Todos os cursos' : 'Banco de Questões');
+
+  if (cursos.length <= 1) {
+    grupoFiltroCursoEl.classList.add('oculto');
+    return;
+  }
+  grupoFiltroCursoEl.classList.remove('oculto');
+
+  const contagem = new Map();
+  Estado.questoes.forEach((questao) => {
+    if (questao.curso) contagem.set(questao.curso, (contagem.get(questao.curso) || 0) + 1);
+  });
+
+  filtrosCursoEl.innerHTML = cursos.map((c) => `
+    <button type="button" class="filtro-item ${Estado.filtro.curso === c ? 'ativo' : ''}" data-curso="${escapeHtml(c)}">
+      <span>${escapeHtml(c)}</span><span class="filtro-contagem">${contagem.get(c) || 0}</span>
+    </button>
+  `).join('');
+  filtrosCursoEl.querySelectorAll('[data-curso]').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      Estado.filtro.curso = Estado.filtro.curso === botao.dataset.curso ? null : botao.dataset.curso;
+      renderizarBanco();
+    });
+  });
+}
+
 function renderizarFiltros() {
+  renderizarCabecalhoCurso();
+
   const total = Estado.questoes.length;
-  const atuais = Estado.questoes.filter((questao) => questao.periodo === 'atual').length;
+  const contagemPeriodo = new Map();
+  Estado.questoes.forEach((questao) => {
+    contagemPeriodo.set(questao.periodo, (contagemPeriodo.get(questao.periodo) || 0) + 1);
+  });
 
   const periodos = [
     ['todas', 'Todas as questões', total],
-    ['atual', 'Período atual', atuais],
-    ['historico', 'Histórico', total - atuais],
+    ...Constantes.periodos.map((p) => [String(p), `${p}º período`, contagemPeriodo.get(p) || 0]),
   ];
   filtrosPeriodoEl.innerHTML = periodos.map(([chave, rotulo, quantidade]) => `
-    <button type="button" class="filtro-item ${Estado.filtro.periodo === chave ? 'ativo' : ''}" data-periodo="${chave}">
+    <button type="button" class="filtro-item ${String(Estado.filtro.periodo) === chave ? 'ativo' : ''}" data-periodo="${chave}">
       <span>${rotulo}</span><span class="filtro-contagem">${quantidade}</span>
     </button>
   `).join('');
@@ -240,7 +310,7 @@ function renderizarLista() {
           <span class="pontos">${formatarPontos(questao.valor)} pts</span>
         </div>
         <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 110) || '(vazio)')}</p>
-        <div class="item-meta">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}</div>
+        <div class="item-meta">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}${cursosDoUsuario().length > 1 ? ` · ${escapeHtml(questao.curso || '—')}` : ''}</div>
       </div>
     </article>
   `).join('');
@@ -291,6 +361,7 @@ function renderizarDetalhe() {
     <blockquote class="detalhe-enunciado">${escapeHtml(questao.texto || '(vazio)')}</blockquote>
 
     <dl class="detalhe-dados">
+      <div><dt>Curso</dt><dd>${escapeHtml(questao.curso || '—')}</dd></div>
       <div><dt>Valor</dt><dd>${formatarPontos(questao.valor)} pts</dd></div>
       <div><dt>Origem</dt><dd>${escapeHtml(questao.tipoOrigem || 'manual')}</dd></div>
       <div><dt>Usada em</dt><dd>${questao.usadaEm || 0} prova(s)</dd></div>
@@ -344,15 +415,18 @@ function renderizarFormularioEdicao(questao) {
 
     <div class="campos-lado-a-lado">
       <label class="campo">Período
-        <select id="edicaoPeriodo">
-          <option value="atual" ${questao.periodo !== 'historico' ? 'selected' : ''}>Período atual</option>
-          <option value="historico" ${questao.periodo === 'historico' ? 'selected' : ''}>Histórico</option>
-        </select>
+        <select id="edicaoPeriodo">${opcoesPeriodo(questao.periodo)}</select>
       </label>
-      <label class="campo">Ano (histórico)
+      <label class="campo">Ano
         <input type="number" id="edicaoAno" min="1990" max="2100" value="${questao.ano || ''}" placeholder="2024">
       </label>
     </div>
+
+    ${cursosDoUsuario().length > 1 ? `
+      <label class="campo">Curso
+        <select id="edicaoCurso">${opcoesCurso(questao.curso)}</select>
+      </label>
+    ` : ''}
 
     <div class="detalhe-acoes">
       <button type="button" class="btn-escuro" id="btnSalvarEdicao">Salvar alterações</button>
@@ -388,6 +462,7 @@ function renderizarFormularioEdicao(questao) {
           valor: document.getElementById('edicaoValor').value,
           periodo: document.getElementById('edicaoPeriodo').value,
           ano: document.getElementById('edicaoAno').value,
+          curso: document.getElementById('edicaoCurso')?.value,
         }),
       });
       Estado.editando = false;
@@ -749,14 +824,16 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
           <input type="number" class="campo-valor" min="0.5" max="100" step="0.5" value="1">
         </label>
         <label class="campo">Período
-          <select class="campo-periodo">
-            <option value="atual">Período atual</option>
-            <option value="historico">Histórico</option>
-          </select>
+          <select class="campo-periodo">${opcoesPeriodo()}</select>
         </label>
         <label class="campo">Ano
           <input type="number" class="campo-ano" min="1990" max="2100" placeholder="2024">
         </label>
+        ${cursosDoUsuario().length > 1 ? `
+          <label class="campo">Curso
+            <select class="campo-curso">${opcoesCurso()}</select>
+          </label>
+        ` : ''}
       </div>
       <div class="acoes">
         <button class="salvar btn-salvar-candidata">Salvar questão</button>
@@ -878,6 +955,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
           valor: item.querySelector('.campo-valor').value,
           periodo: item.querySelector('.campo-periodo').value,
           ano: item.querySelector('.campo-ano').value,
+          curso: item.querySelector('.campo-curso')?.value || cursosDoUsuario()[0],
         });
         item.classList.add('salva');
         avisoEl.className = 'status-inline';
@@ -1090,7 +1168,10 @@ window.App = {
   carregarQuestoes,
   renderizarBanco,
   abrirDrawer,
+  Constantes,
+  cursosDoUsuario,
+  opcoesPeriodo,
+  opcoesCurso,
 };
 
-carregarSessao();
-carregarQuestoes();
+Promise.all([carregarConstantes(), carregarSessao()]).then(() => carregarQuestoes());

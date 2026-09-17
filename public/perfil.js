@@ -4,7 +4,7 @@
  */
 
 (function () {
-  const { EstadoUsuario, pedirJson } = window.App;
+  const { EstadoUsuario, pedirJson, Constantes } = window.App;
 
   function iniciais(nome) {
     const partes = String(nome || '').trim().split(/\s+/).filter(Boolean);
@@ -46,8 +46,32 @@
       document.getElementById('perfilCargo').value = usuario.cargo || '';
       document.getElementById('perfilNotificacoes').checked = usuario.notificacoesEmail !== false;
       document.getElementById('perfilIdioma').value = usuario.idioma || 'pt-BR';
+      renderizarChecklistCursos(usuario);
       carregadoUmaVez = true;
     }
+  }
+
+  // Só professores escolhem curso — a Direção enxerga todos, então nem
+  // mostra o bloco.
+  function renderizarChecklistCursos(usuario) {
+    const bloco = document.getElementById('blocoPerfilCursos');
+    const container = document.getElementById('perfilCursosChecklist');
+    if (usuario.perfil !== 'professor') {
+      bloco.classList.add('oculto');
+      return;
+    }
+    bloco.classList.remove('oculto');
+    const selecionados = new Set(usuario.cursos || []);
+    container.innerHTML = Constantes.cursos.map((curso) => `
+      <label>
+        <input type="checkbox" value="${curso.replace(/"/g, '&quot;')}" ${selecionados.has(curso) ? 'checked' : ''}>
+        ${curso}
+      </label>
+    `).join('');
+  }
+
+  function cursosMarcados() {
+    return [...document.querySelectorAll('#perfilCursosChecklist input:checked')].map((el) => el.value);
   }
 
   /* --------------------------------------------------- informações pessoais */
@@ -65,6 +89,7 @@
           nome: document.getElementById('perfilNome').value.trim(),
           instituicao: document.getElementById('perfilInstituicao').value.trim(),
           cargo: document.getElementById('perfilCargo').value.trim(),
+          ...(EstadoUsuario.atual.perfil === 'professor' ? { cursos: cursosMarcados() } : {}),
         }),
       });
       EstadoUsuario.atual = usuario;

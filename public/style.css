@@ -841,9 +841,22 @@
   }
   .campo-select:focus { outline: none; border-color: var(--accent); }
 
+  .cursos-checklist {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem;
+    margin-top: 0.5rem; max-height: 230px; overflow-y: auto;
+    border: 1px solid var(--rule); border-radius: 8px; padding: 0.8rem 0.9rem;
+  }
+  .cursos-checklist label {
+    display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;
+    font-weight: 400; text-transform: none; letter-spacing: normal; cursor: pointer;
+  }
+  .cursos-checklist input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--ink); }
+  .campo-erro { color: var(--claret); font-size: 0.78rem; margin-top: 0.35rem; }
+
   @media (max-width: 760px) {
     .perfil-grid { grid-template-columns: 1fr; }
     .login-card { padding: 1.6rem 1.4rem; }
+    .cursos-checklist { grid-template-columns: 1fr; max-height: 200px; }
   }
 
   /* ================================================================
