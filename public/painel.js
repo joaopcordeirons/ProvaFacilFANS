@@ -122,19 +122,19 @@
 
     return `
       <tr data-id="${escapeHtml(prova.id)}">
-        <td class="prova-titulo">${escapeHtml(prova.titulo)}</td>
-        <td>${escapeHtml(prova.curso || '—')}</td>
-        <td class="numerica">${escapeHtml(String(prova.quantidadeQuestoes || 0))}</td>
-        <td class="numerica">${escapeHtml(valor)}</td>
-        <td>
+        <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}</td>
+        <td data-th="Disciplina">${escapeHtml(prova.curso || '—')}</td>
+        <td class="numerica" data-th="Questões">${escapeHtml(String(prova.quantidadeQuestoes || 0))}</td>
+        <td class="numerica" data-th="Valor">${escapeHtml(valor)}</td>
+        <td data-th="Status">
           <select class="status-prova ${status.classe}" data-status aria-label="Situação da prova">
             ${Object.entries(STATUS).map(([chave, item]) => `
               <option value="${chave}" ${chave === prova.status ? 'selected' : ''}>${item.rotulo}</option>
             `).join('')}
           </select>
         </td>
-        <td class="discreta">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
-        <td class="acao"><button type="button" data-abrir>Ver →</button></td>
+        <td class="discreta" data-th="Última atualização">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
+        <td class="acao" data-th=""><button type="button" data-abrir>Ver →</button></td>
       </tr>
     `;
   }

@@ -109,6 +109,7 @@ function mostrarView(nome) {
     botao.classList.toggle('ativo', alvo === nome || (nome === 'revisao' && alvo === 'montar'));
   });
   window.scrollTo({ top: 0 });
+  fecharMenuMobile();
 
   if (nome === 'painel') window.Painel?.renderizar();
   if (nome === 'montar') window.MontagemProva?.renderizarMontagem();
@@ -118,6 +119,26 @@ function mostrarView(nome) {
 
 document.querySelectorAll('.nav-item[data-ir-para]').forEach((botao) => {
   botao.addEventListener('click', () => mostrarView(botao.dataset.irPara));
+});
+
+/* ---------------------------------------- menu lateral (off-canvas no celular) */
+
+const sidebarEl = document.getElementById('sidebar');
+const sidebarOverlayEl = document.getElementById('sidebarOverlay');
+
+function abrirMenuMobile() {
+  sidebarEl.classList.add('aberta');
+  sidebarOverlayEl.classList.remove('oculto');
+}
+function fecharMenuMobile() {
+  sidebarEl.classList.remove('aberta');
+  sidebarOverlayEl.classList.add('oculto');
+}
+document.getElementById('btnAbrirMenu')?.addEventListener('click', abrirMenuMobile);
+document.getElementById('btnFecharMenu')?.addEventListener('click', fecharMenuMobile);
+sidebarOverlayEl.addEventListener('click', fecharMenuMobile);
+window.addEventListener('resize', () => {
+  if (window.innerWidth > 760) fecharMenuMobile();
 });
 
 /* -------------------------------------------- Banco de Questões (3 painéis) */
@@ -1010,7 +1031,7 @@ function rotuloPerfil(perfil) {
 // usuário autenticado (chega uma única vez, na inicialização).
 function aplicarUsuarioNaInterface(usuario) {
   const legenda = [rotuloPerfil(usuario.perfil), usuario.cargo || null].filter(Boolean).join(' · ');
-  document.querySelectorAll('#avatarSidebar, #avatarTopo').forEach((el) => {
+  document.querySelectorAll('#avatarSidebar, #avatarTopo, #avatarMobile').forEach((el) => {
     el.textContent = iniciais(usuario.nome);
   });
   const nomeEl = document.getElementById('contaNomeSidebar');

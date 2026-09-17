@@ -432,8 +432,6 @@
   details.bruto textarea { margin-top: 0.5rem; }
 
   @media (max-width: 760px) {
-    .sidebar { display: none; }
-    .main { padding: 1.25rem; }
     .drawer { width: 100vw; }
   }
 
@@ -846,4 +844,110 @@
   @media (max-width: 760px) {
     .perfil-grid { grid-template-columns: 1fr; }
     .login-card { padding: 1.6rem 1.4rem; }
+  }
+
+  /* ================================================================
+     Responsivo: barra mobile + menu lateral off-canvas + ajustes gerais
+     ================================================================ */
+
+  .mobile-topbar {
+    display: none; /* só aparece em telas estreitas, ver media query abaixo */
+    position: fixed; top: 0; left: 0; right: 0; height: 54px; z-index: 25;
+    background: var(--surface); border-bottom: 1px solid var(--rule);
+    align-items: center; justify-content: space-between; padding: 0 1rem;
+  }
+  .menu-btn {
+    border: 1px solid var(--rule); background: var(--surface); border-radius: 6px;
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    color: var(--ink); cursor: pointer; flex-shrink: 0;
+  }
+  .menu-btn:hover { border-color: var(--rule-strong); }
+  .mobile-topbar-logo { display: flex; align-items: center; gap: 0.5rem; font-family: var(--serif); font-size: 0.95rem; font-weight: 500; }
+  .mobile-topbar-logo .logo-mark { width: 26px; height: 26px; font-size: 0.82rem; }
+
+  .sidebar-overlay {
+    position: fixed; inset: 0; background: rgba(27,29,34,0.32); z-index: 38;
+  }
+  .sidebar-overlay.oculto { display: none; }
+
+  .fechar-sidebar { display: none; } /* só aparece no menu off-canvas mobile */
+
+  @media (max-width: 760px) {
+    body { overflow-x: hidden; }
+    .mobile-topbar { display: flex; }
+    .app-shell { padding-top: 54px; display: block; }
+
+    /* Sidebar vira um painel deslizante por cima do conteúdo, não mais escondida */
+    .sidebar {
+      display: flex; position: fixed; top: 0; left: 0; bottom: 0;
+      width: min(280px, 84vw); z-index: 40;
+      transform: translateX(-100%); transition: transform 0.22s ease;
+      box-shadow: 16px 0 40px rgba(27,29,34,0.14);
+    }
+    .sidebar.aberta { transform: translateX(0); }
+    .fechar-sidebar {
+      display: flex; align-items: center; justify-content: center;
+      position: absolute; top: 1.1rem; right: 1.1rem;
+      width: 28px; height: 28px; border: 1px solid var(--rule); border-radius: 6px;
+      background: var(--surface); color: var(--ink-muted); cursor: pointer;
+    }
+    .nav-item { padding: 0.75rem 0.6rem; font-size: 0.92rem; } /* alvo de toque maior */
+
+    .main { padding: 1.1rem; max-width: 100%; }
+
+    /* Cabeçalhos das telas: título em cima, busca/ações embaixo, ocupando a largura toda */
+    .main-header { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+    .header-acoes { width: 100%; }
+    .campo-busca { min-width: 0; width: 100%; }
+    .header-acoes .btn-primary { width: 100%; }
+
+    /* Botões e campos com alvo de toque confortável */
+    .btn-primary, .btn-escuro, .btn-secundario, button.enviar,
+    .campo input, .campo select, .campo textarea, .campo-busca input, .campo-select {
+      min-height: 44px;
+    }
+    .campo textarea { min-height: 90px; }
+
+    /* Formulários lado a lado viram empilhados */
+    .campos-lado-a-lado, .classificacao { grid-template-columns: 1fr; }
+
+    /* Tabela "Provas recentes" vira lista de cartões, sem scroll horizontal */
+    table.tabela-provas, table.tabela-provas thead, table.tabela-provas tbody,
+    table.tabela-provas tr, table.tabela-provas td {
+      display: block; width: 100%; white-space: normal;
+    }
+    table.tabela-provas thead { display: none; }
+    table.tabela-provas tr {
+      border: 1px solid var(--rule); border-radius: 8px; padding: 0.85rem 0.9rem;
+      margin-bottom: 0.7rem; background: var(--surface);
+    }
+    table.tabela-provas td {
+      border-bottom: none; padding: 0.3rem 0; display: flex;
+      justify-content: space-between; align-items: center; gap: 0.75rem; text-align: right;
+    }
+    table.tabela-provas td::before {
+      content: attr(data-th); color: var(--ink-faint); font-family: var(--mono);
+      font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; text-align: left;
+    }
+    table.tabela-provas td[data-th=""]::before { content: none; }
+    table.tabela-provas td.prova-titulo { font-size: 1rem; padding-bottom: 0.5rem; border-bottom: 1px dashed var(--rule); margin-bottom: 0.35rem; }
+    table.tabela-provas td.acao { justify-content: flex-end; }
+    table.tabela-provas .status-prova { width: 100%; max-width: 180px; }
+
+    /* Drawer lateral e modais ocupam a tela toda / se ajustam */
+    .drawer-tabs { gap: 1rem; }
+    .modal-caixa { max-width: 100%; }
+
+    /* Painel Perfil: cabeçalho e grid já empilham (ver regra existente), só reforça respiro */
+    .perfil-cabecalho { padding: 1.1rem 1.2rem; }
+
+    /* Menu de perfil (Professor/Direção) do login continua 2 colunas — cabe bem */
+    .login-shell { padding: 1.25rem 1rem; align-items: flex-start; }
+    .login-card { margin-top: 0.5rem; }
+    .login-linha-fim { flex-wrap: wrap; gap: 0.6rem; }
+  }
+
+  @media (max-width: 420px) {
+    .indicador-numero { font-size: 1.6rem; }
+    .resumo-nota { font-size: 1.35rem; }
   }
