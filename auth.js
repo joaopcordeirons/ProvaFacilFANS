@@ -56,6 +56,21 @@ function validarPerfil(perfil) {
   }
 }
 
+// Cadastro de Direção não pode ficar aberto a qualquer um: exige um
+// código de convite (CODIGO_CONVITE_DIRECAO no ambiente), compartilhado
+// só com quem a instituição autorizar. Se a variável não estiver
+// configurada, o cadastro de Direção fica bloqueado por padrão — falha
+// segura, em vez de deixar a conta mais sensível do sistema aberta.
+function validarCodigoConvite(codigo) {
+  const codigoEsperado = process.env.CODIGO_CONVITE_DIRECAO;
+  if (!codigoEsperado) {
+    throw erro('Cadastro de Direção está temporariamente indisponível. Contate o suporte da instituição.', 503);
+  }
+  if (String(codigo || '').trim() !== codigoEsperado) {
+    throw erro('Código de convite da Direção inválido.', 403);
+  }
+}
+
 // Professor(a) precisa lecionar em pelo menos um curso (pode ser vários —
 // é isso que decide em quais bancos de questões a conta consegue
 // adicionar/ver questões). Direção não seleciona curso: enxerga todos.
@@ -112,7 +127,7 @@ async function buscarUsuarioPorIdBruto(id) {
   return doc.exists ? doc : null;
 }
 
-async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos }) {
+async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos, codigoConvite }) {
   const nomeLimpo = String(nome || '').trim();
   if (!nomeLimpo) throw erro('Informe o nome completo.', 400);
 
@@ -120,6 +135,9 @@ async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cu
   validarEmail(emailLimpo);
   validarSenha(senha);
   validarPerfil(perfil);
+  if (perfil === 'direcao') {
+    validarCodigoConvite(codigoConvite);
+  }
   const cursosValidados = normalizarCursos(cursos, perfil);
 
   const existente = await buscarUsuarioPorEmailBruto(emailLimpo);

@@ -40,11 +40,16 @@ function cursosMarcadosNoCadastro() {
 }
 
 // O bloco de cursos só faz sentido pra Professor — Direção enxerga tudo.
+// Já o código de convite é o contrário: só existe pra Direção, já que é
+// isso que impede qualquer um de criar essa conta com acesso total.
 function atualizarBlocoCursosCadastro() {
   const bloco = document.getElementById('blocoCadastroCursos');
+  const blocoConvite = document.getElementById('blocoCadastroCodigoConvite');
   const ehProfessor = perfilSelecionado('perfilSeletorCadastro') === 'professor';
   bloco.classList.toggle('oculto', !ehProfessor);
+  blocoConvite.classList.toggle('oculto', ehProfessor);
   if (!ehProfessor) document.getElementById('erroCadastroCursos').classList.add('oculto');
+  if (ehProfessor) document.getElementById('cadastroCodigoConvite').value = '';
 }
 
 /* ------------------------------------------------------- navegação entre vistas */
@@ -182,6 +187,12 @@ document.getElementById('formCadastro').addEventListener('submit', async (evento
   }
   erroCursosEl.classList.add('oculto');
 
+  const codigoConvite = document.getElementById('cadastroCodigoConvite').value.trim();
+  if (perfil === 'direcao' && !codigoConvite) {
+    definirStatus('statusCadastro', 'Informe o código de convite da Direção.', 'erro');
+    return;
+  }
+
   btn.disabled = true;
   try {
     const email = document.getElementById('cadastroEmail').value.trim();
@@ -195,6 +206,7 @@ document.getElementById('formCadastro').addEventListener('submit', async (evento
         instituicao: document.getElementById('cadastroInstituicao').value.trim(),
         cargo: document.getElementById('cadastroCargo').value.trim(),
         cursos,
+        codigoConvite,
       }),
     });
     abrirVistaConfirmeEmail(email);

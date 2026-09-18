@@ -150,8 +150,8 @@ function origemDoPedido(req) {
 // liberado depois que o link enviado por e-mail for confirmado.
 app.post('/api/auth/registrar', express.json({ limit: '20kb' }), async (req, res) => {
   try {
-    const { nome, email, senha, perfil, instituicao, cargo, cursos } = req.body || {};
-    const { usuario, tokenVerificacao } = await criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos });
+    const { nome, email, senha, perfil, instituicao, cargo, cursos, codigoConvite } = req.body || {};
+    const { usuario, tokenVerificacao } = await criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cursos, codigoConvite });
 
     const link = `${origemDoPedido(req)}/login.html?verificar=${tokenVerificacao}`;
     await enviarEmailVerificacao(usuario.email, usuario.nome, link);
