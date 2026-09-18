@@ -747,13 +747,21 @@
   .aviso-revisao.reprovada { border-color: var(--claret); background: var(--claret-soft); color: var(--claret); }
   .aviso-revisao.aprovada { border-color: var(--moss); background: var(--moss-soft); color: var(--moss); }
 
-  .item-revisao-check {
-    display: flex; align-items: flex-start; gap: 0.5rem;
+  .item-revisao-check { display: flex; align-items: flex-start; gap: 0.5rem;
     padding: 0.4rem 0.5rem; border-top: 1px dashed var(--rule);
     font-size: 0.82rem; color: var(--ink-muted); cursor: pointer;
   }
   .item-revisao-check input { margin-top: 0.2rem; flex-shrink: 0; }
   .item-revisao-check:hover { color: var(--ink); }
+
+  /* Questão sinalizada pela Direção como motivo da reprovação, exibida
+     de volta pro professor no passo de revisão da montagem. */
+  .item-revisao.reprovada-pela-direcao { border-color: var(--claret); background: var(--claret-soft); }
+  .tag-reprovada {
+    display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px;
+    background: var(--claret); color: #fff; font-family: var(--mono); font-size: 0.62rem;
+    letter-spacing: 0.06em; text-transform: uppercase; vertical-align: middle;
+  }
 
   .revisao-acoes { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.2rem; }
   .revisao-acoes .btn-perigo.largo { width: 100%; }
