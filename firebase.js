@@ -267,9 +267,9 @@ async function registrarUsoQuestoes(ids) {
 // aprovadas pela direção e a lista das mais recentes.
 const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada', 'reprovada'];
 
-// O professor só controla o começo do fluxo (rascunho → em análise). A
-// decisão final (aprovar/reprovar) é exclusiva da Direção, via revisarProva.
-const STATUS_PROFESSOR = ['rascunho', 'em_revisao'];
+// O professor não controla o status — ele nasce "em análise" assim que a
+// prova é gerada (ver registrarProva) e só a Direção pode movê-lo daí em
+// diante, via revisarProva.
 const STATUS_REVISAO_COORDENADOR = ['aprovada', 'reprovada', 'em_revisao'];
 
 async function registrarProva(dados) {
@@ -287,7 +287,9 @@ async function registrarProva(dados) {
     questaoIds,
     quantidadeQuestoes: questaoIds.length,
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
-    status: 'rascunho',
+    // Gerar o arquivo já é o "envio" para a Direção — não existe rascunho
+    // manual nem botão de submissão; o professor não altera isso depois.
+    status: 'em_revisao',
     // Preenchidos só quando a Direção revisa (ver revisarProva).
     comentarioCoordenador: '',
     questoesReprovadas: [],
@@ -379,24 +381,6 @@ async function buscarProvaPorId(id) {
   return doc.exists ? formatarProva(doc) : null;
 }
 
-// O professor só marca em que pé está a preparação da prova (rascunho ou
-// enviada para análise) — quem decide aprovar/reprovar é a Direção, em
-// revisarProva.
-async function atualizarStatusProva(id, status) {
-  validarId(id);
-  if (!STATUS_PROFESSOR.includes(status)) {
-    throw Object.assign(new Error('Status de prova inválido.'), { statusCode: 400 });
-  }
-  const banco = exigirFirestore();
-  const referencia = banco.collection('provas').doc(id);
-  const documento = await referencia.get();
-  if (!documento.exists) {
-    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
-  }
-  await referencia.update({ status, atualizadoEm: admin.firestore.FieldValue.serverTimestamp() });
-  return { id, status };
-}
-
 // A Direção aprova, reprova ou deixa a prova em análise. Registra um
 // comentário geral e, se for o caso, quais questões pesaram na
 // reprovação — o professor vê tudo isso assim que reabrir a prova.
@@ -448,7 +432,6 @@ module.exports = {
   registrarProva,
   listarProvas,
   buscarProvaPorId,
-  atualizarStatusProva,
   revisarProva,
   sanitizarHtml,
 };
