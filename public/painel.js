@@ -24,6 +24,11 @@
     reprovada: { rotulo: 'Reprovada', classe: 'reprovada' },
   };
 
+  // O professor só controla o começo do fluxo (rascunho → mandar para
+  // análise). Aprovar/reprovar é decisão exclusiva da Direção, tomada na
+  // Revisão (drawerRevisao), não neste seletor solto da tabela.
+  const STATUS_EDITAVEL_PROFESSOR = ['rascunho', 'em_revisao'];
+
   function ehDirecao() {
     return EstadoUsuario.atual?.perfil === 'direcao';
   }
@@ -127,9 +132,18 @@
     const direcao = ehDirecao();
     const temComentario = Boolean(prova.comentarioCoordenador);
 
-    // O status é só leitura pra todo mundo: quem decide é a Direção, na
-    // tela de Revisão — o professor não tem como alterá-lo por aqui.
-    const statusHtml = `<span class="status-badge ${status.classe}">${escapeHtml(status.rotulo)}</span>`;
+    // A Direção vê o status como rótulo fixo — a decisão é tomada na
+    // Revisão, não num seletor solto. O professor continua trocando entre
+    // rascunho/em análise por aqui.
+    const statusHtml = direcao
+      ? `<span class="status-badge ${status.classe}">${escapeHtml(status.rotulo)}</span>`
+      : `<select class="status-prova ${status.classe}" data-status aria-label="Situação da prova">
+          ${STATUS_EDITAVEL_PROFESSOR.map((chave) => `
+            <option value="${chave}" ${chave === prova.status ? 'selected' : ''}>${STATUS[chave].rotulo}</option>
+          `).join('')}
+          ${!STATUS_EDITAVEL_PROFESSOR.includes(prova.status)
+            ? `<option value="${prova.status}" selected disabled>${status.rotulo}</option>` : ''}
+        </select>`;
 
     return `
       <tr data-id="${escapeHtml(prova.id)}">
@@ -179,6 +193,12 @@
         if (ehDirecao()) window.RevisaoDirecao?.abrir(prova);
         else abrirProva(prova);
       });
+      const seletorStatus = linha.querySelector('[data-status]');
+      if (seletorStatus) {
+        seletorStatus.addEventListener('change', (evento) => {
+          mudarStatus(prova, evento.target.value);
+        });
+      }
     });
   }
 
@@ -198,21 +218,37 @@
       window.alert('Algumas questões desta prova foram excluídas do banco e ficaram de fora.');
     }
 
-    // A Direção pode ter reprovado (ou só deixado um comentário) — isso
-    // vira um aviso fixo no passo de revisão, não um popup que some.
-    Estado.provaFeedback = (prova.comentarioCoordenador || (prova.questoesReprovadas || []).length)
-      ? {
-        id: prova.id,
-        status: prova.status,
-        comentario: prova.comentarioCoordenador || '',
-        questoesReprovadas: prova.questoesReprovadas || [],
-      }
-      : null;
+    // A Direção pode ter reprovado (ou deixado um comentário mesmo
+    // aprovando) — o professor precisa ver isso antes de continuar.
+    if (prova.comentarioCoordenador) {
+      const cabecalho = prova.status === 'reprovada' ? 'Prova reprovada pela Direção' : 'Comentário da Direção';
+      window.alert(`${cabecalho}:\n\n${prova.comentarioCoordenador}`);
+    }
 
     Estado.selecionadas = existentes;
     window.App.salvarSelecao();
     renderizarBanco();
     mostrarView('revisao');
+  }
+
+  async function mudarStatus(prova, status) {
+    const anterior = prova.status;
+    prova.status = status;
+    renderizarIndicadores();
+    renderizarTabela();
+    try {
+      await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch (err) {
+      // Não deu para salvar: volta ao que estava para a tela não mentir.
+      prova.status = anterior;
+      renderizarIndicadores();
+      renderizarTabela();
+      window.alert(err.message);
+    }
   }
 
   async function carregarProvas() {
@@ -244,10 +280,7 @@
     mostrarView('banco');
   });
 
-  document.getElementById('btnCriarProva').addEventListener('click', () => {
-    Estado.provaFeedback = null;
-    mostrarView('montar');
-  });
+  document.getElementById('btnCriarProva').addEventListener('click', () => mostrarView('montar'));
 
   // Chamado pela navegação (mostrarView) e depois de carregar o banco.
   async function renderizar({ recarregar = true } = {}) {

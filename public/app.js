@@ -15,11 +15,6 @@ const Estado = {
   detalheId: null,             // questão aberta no painel de detalhe
   filtro: { curso: null, periodo: 'todas', assunto: null, palavraChave: '', assunto_busca: '' },
   editando: false,
-  // Preenchido ao reabrir uma prova pelo Painel (abrirProva) que já foi
-  // revisada pela Direção: { id, status, comentario, questoesReprovadas }.
-  // Usado pelo passo de revisão da montagem para mostrar o aviso e marcar
-  // as questões sinalizadas. Fica null numa prova nova.
-  provaFeedback: null,
 };
 
 // Lista fixa de cursos/períodos, carregada uma vez de /api/constantes e

@@ -25,6 +25,7 @@ const {
   registrarProva,
   listarProvas,
   buscarProvaPorId,
+  atualizarStatusProva,
   revisarProva,
 } = require('./firebase');
 const {
@@ -595,9 +596,21 @@ app.get('/api/provas', async (req, res) => {
   }
 });
 
-// Não existe rota para o professor alterar o status da prova: a geração
-// já manda ela "Em análise" automaticamente (ver registrarProva), e só a
-// Direção pode mudar isso a partir daí — pela rota de revisão abaixo.
+// O professor marca em que pé está a preparação da prova (rascunho ou
+// enviada para análise da Direção).
+app.patch('/api/provas/:id', express.json(), async (req, res) => {
+  try {
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona no curso dessa prova.' });
+    }
+    return res.json(await atualizarStatusProva(req.params.id, (req.body || {}).status));
+  } catch (err) {
+    console.error('Erro ao atualizar a prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
 
 // A Direção aprova, reprova ou deixa a prova em análise — com um
 // comentário geral e, se reprovar, quais questões específicas pesaram na

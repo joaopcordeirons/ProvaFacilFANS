@@ -140,34 +140,11 @@
     renderizarRevisao();
   }
 
-  const STATUS_ROTULO_FEEDBACK = { reprovada: 'Reprovada', aprovada: 'Aprovada', em_revisao: 'Em análise' };
-  const avisoFeedbackEl = document.getElementById('avisoFeedbackDirecao');
-
-  function renderizarAvisoFeedback() {
-    if (!avisoFeedbackEl) return;
-    const feedback = Estado.provaFeedback;
-    if (!feedback) {
-      avisoFeedbackEl.className = 'aviso-revisao oculto';
-      avisoFeedbackEl.innerHTML = '';
-      return;
-    }
-    const rotulo = STATUS_ROTULO_FEEDBACK[feedback.status] || feedback.status;
-    const classeExtra = feedback.status === 'reprovada' ? 'reprovada' : (feedback.status === 'aprovada' ? 'aprovada' : '');
-    avisoFeedbackEl.className = `aviso-revisao ${classeExtra}`;
-    avisoFeedbackEl.innerHTML = `<strong>${escapeHtml(rotulo)} pela Direção.</strong>`
-      + (feedback.comentario ? ` ${escapeHtml(feedback.comentario)}` : '')
-      + (feedback.questoesReprovadas.length
-        ? ` ${feedback.questoesReprovadas.length === 1 ? 'A questão sinalizada está marcada' : 'As questões sinalizadas estão marcadas'} abaixo.`
-        : '');
-  }
-
   function renderizarRevisao() {
     if (!listaRevisaoEl) return;
     prepararCabecalhoProva();
-    renderizarAvisoFeedback();
 
     const selecionadas = questoesSelecionadas();
-    const flags = new Set(Estado.provaFeedback?.questoesReprovadas || []);
     contadorRevisaoEl.textContent = `(${selecionadas.length} · ${formatarPontos(pontuacaoSelecionada())} pts)`;
 
     if (!selecionadas.length) {
@@ -180,14 +157,13 @@
     document.getElementById('btnGerarPdf').disabled = false;
     document.getElementById('btnGerarDocx').disabled = false;
     listaRevisaoEl.innerHTML = selecionadas.map((questao, indice) => `
-      <article class="item-revisao ${flags.has(questao.id) ? 'reprovada-pela-direcao' : ''}" data-id="${escapeHtml(questao.id)}">
+      <article class="item-revisao" data-id="${escapeHtml(questao.id)}">
         <div class="ordem">${indice + 1}</div>
         <div class="item-corpo">
           <div class="item-cabecalho">
             <span class="codigo">${escapeHtml(questao.codigo)}</span>
             <span class="pontos">${formatarPontos(questao.valor)} pts</span>
             <span class="item-origem">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}</span>
-            ${flags.has(questao.id) ? '<span class="tag-reprovada">Reprovada pela Direção</span>' : ''}
           </div>
           <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 180) || '(vazio)')}</p>
         </div>
