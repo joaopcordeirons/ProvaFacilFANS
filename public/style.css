@@ -720,6 +720,43 @@
   .status-prova.aprovada { border-color: var(--moss); background-color: var(--moss-soft); color: var(--moss); }
   .status-prova.revisao { border-color: var(--amber); background-color: var(--amber-soft); color: var(--amber); }
   .status-prova.rascunho { border-style: dashed; }
+  .status-prova.reprovada { border-color: var(--claret); background-color: var(--claret-soft); color: var(--claret); }
+
+  /* Status como rótulo fixo (tela da Direção — a decisão é tomada na
+     revisão, não neste seletor solto) */
+  .status-badge {
+    display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem;
+    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
+    text-transform: uppercase; border: 1px solid var(--rule-strong); color: var(--ink-muted);
+  }
+  .status-badge.aprovada { border-color: var(--moss); background-color: var(--moss-soft); color: var(--moss); }
+  .status-badge.revisao { border-color: var(--amber); background-color: var(--amber-soft); color: var(--amber); }
+  .status-badge.reprovada { border-color: var(--claret); background-color: var(--claret-soft); color: var(--claret); }
+  .status-badge.rascunho { border-style: dashed; }
+
+  .marca-comentario { font-size: 0.8rem; margin-left: 0.3rem; cursor: help; }
+
+  /* ---------- Drawer "Revisão da Direção" ---------- */
+  .drawer-subtitulo { margin-top: 0.2rem; font-size: 0.82rem; color: var(--ink-muted); }
+  .aviso-revisao {
+    border: 1px solid var(--rule-strong); border-radius: 8px; padding: 0.8rem 0.95rem;
+    margin-bottom: 1.15rem; font-size: 0.84rem; color: var(--ink-muted); background: var(--paper);
+  }
+  .aviso-revisao.oculto { display: none; }
+  .aviso-revisao strong { color: var(--ink); }
+  .aviso-revisao.reprovada { border-color: var(--claret); background: var(--claret-soft); color: var(--claret); }
+  .aviso-revisao.aprovada { border-color: var(--moss); background: var(--moss-soft); color: var(--moss); }
+
+  .item-revisao-check {
+    display: flex; align-items: flex-start; gap: 0.5rem;
+    padding: 0.4rem 0.5rem; border-top: 1px dashed var(--rule);
+    font-size: 0.82rem; color: var(--ink-muted); cursor: pointer;
+  }
+  .item-revisao-check input { margin-top: 0.2rem; flex-shrink: 0; }
+  .item-revisao-check:hover { color: var(--ink); }
+
+  .revisao-acoes { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.2rem; }
+  .revisao-acoes .btn-perigo.largo { width: 100%; }
 
   @media (max-width: 900px) {
     .indicadores { grid-template-columns: repeat(2, minmax(0, 1fr)); }

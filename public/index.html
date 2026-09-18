@@ -428,6 +428,40 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         </div>
       </div>
     </aside>
+
+    <!-- ===================== DRAWER: REVISÃO DA DIREÇÃO ===================== -->
+    <div class="drawer-overlay oculto" id="drawerRevisaoOverlay"></div>
+    <aside class="drawer oculto" id="drawerRevisao">
+      <div class="drawer-header">
+        <div>
+          <h2>Revisão da Direção</h2>
+          <div class="drawer-subtitulo" id="revisaoTituloProva">—</div>
+        </div>
+        <button type="button" class="fechar-drawer" id="btnFecharDrawerRevisao" aria-label="Fechar">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1 1l11 11M12 1L1 12"/></svg>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <div class="aviso-revisao oculto" id="revisaoAvisoAnterior"></div>
+
+        <div class="secao-titulo">Questões da prova <span class="contador" id="contadorRevisaoQuestoes"></span></div>
+        <p class="subtitle">Marque as questões que motivam a reprovação, se for o caso.</p>
+        <div class="lista-revisao" id="listaRevisaoQuestoes"></div>
+
+        <label class="campo">Comentário para o professor
+          <textarea id="revisaoComentario" rows="4" placeholder="Explique o motivo da decisão, ajustes necessários etc. (opcional)"></textarea>
+        </label>
+
+        <div class="status" id="statusRevisao"></div>
+
+        <div class="revisao-acoes">
+          <button type="button" class="btn-escuro largo" id="btnAprovarProva">Aprovar prova</button>
+          <button type="button" class="btn-perigo largo" id="btnReprovarProva">Reprovar prova</button>
+          <button type="button" class="btn-secundario largo" id="btnDeixarEmAnalise">Deixar em análise</button>
+        </div>
+      </div>
+    </aside>
   </div>
 
   <datalist id="assuntosConhecidos"></datalist>
@@ -436,5 +470,6 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
   <script src="painel.js"></script>
   <script src="montarProva.js"></script>
   <script src="perfil.js"></script>
+  <script src="revisaoDirecao.js"></script>
 </body>
 </html>

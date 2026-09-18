@@ -9,7 +9,7 @@
 
 (function () {
   const {
-    Estado, escapeHtml, formatarPontos, pedirJson, mostrarView, renderizarBanco,
+    Estado, EstadoUsuario, escapeHtml, formatarPontos, pedirJson, mostrarView, renderizarBanco,
   } = window.App;
 
   const indicadoresEl = document.getElementById('indicadoresPainel');
@@ -19,9 +19,19 @@
 
   const STATUS = {
     rascunho: { rotulo: 'Rascunho', classe: 'rascunho' },
-    em_revisao: { rotulo: 'Em revisão', classe: 'revisao' },
+    em_revisao: { rotulo: 'Em análise', classe: 'revisao' },
     aprovada: { rotulo: 'Aprovada', classe: 'aprovada' },
+    reprovada: { rotulo: 'Reprovada', classe: 'reprovada' },
   };
+
+  // O professor só controla o começo do fluxo (rascunho → mandar para
+  // análise). Aprovar/reprovar é decisão exclusiva da Direção, tomada na
+  // Revisão (drawerRevisao), não neste seletor solto da tabela.
+  const STATUS_EDITAVEL_PROFESSOR = ['rascunho', 'em_revisao'];
+
+  function ehDirecao() {
+    return EstadoUsuario.atual?.perfil === 'direcao';
+  }
 
   let provas = [];
   let erroCarregamento = null;
@@ -119,22 +129,31 @@
     const valor = prova.pontuacaoTotal
       ? `${formatarPontos(prova.pontuacaoTotal)} pts`
       : '—';
+    const direcao = ehDirecao();
+    const temComentario = Boolean(prova.comentarioCoordenador);
+
+    // A Direção vê o status como rótulo fixo — a decisão é tomada na
+    // Revisão, não num seletor solto. O professor continua trocando entre
+    // rascunho/em análise por aqui.
+    const statusHtml = direcao
+      ? `<span class="status-badge ${status.classe}">${escapeHtml(status.rotulo)}</span>`
+      : `<select class="status-prova ${status.classe}" data-status aria-label="Situação da prova">
+          ${STATUS_EDITAVEL_PROFESSOR.map((chave) => `
+            <option value="${chave}" ${chave === prova.status ? 'selected' : ''}>${STATUS[chave].rotulo}</option>
+          `).join('')}
+          ${!STATUS_EDITAVEL_PROFESSOR.includes(prova.status)
+            ? `<option value="${prova.status}" selected disabled>${status.rotulo}</option>` : ''}
+        </select>`;
 
     return `
       <tr data-id="${escapeHtml(prova.id)}">
-        <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}</td>
+        <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}${temComentario ? ' <span class="marca-comentario" title="Há um comentário da Direção sobre esta prova">💬</span>' : ''}</td>
         <td data-th="Disciplina">${escapeHtml(prova.curso || '—')}</td>
         <td class="numerica" data-th="Questões">${escapeHtml(String(prova.quantidadeQuestoes || 0))}</td>
         <td class="numerica" data-th="Valor">${escapeHtml(valor)}</td>
-        <td data-th="Status">
-          <select class="status-prova ${status.classe}" data-status aria-label="Situação da prova">
-            ${Object.entries(STATUS).map(([chave, item]) => `
-              <option value="${chave}" ${chave === prova.status ? 'selected' : ''}>${item.rotulo}</option>
-            `).join('')}
-          </select>
-        </td>
+        <td data-th="Status">${statusHtml}</td>
         <td class="discreta" data-th="Última atualização">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
-        <td class="acao" data-th=""><button type="button" data-abrir>Ver →</button></td>
+        <td class="acao" data-th=""><button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button></td>
       </tr>
     `;
   }
@@ -170,10 +189,16 @@
 
     tabelaEl.querySelectorAll('tr[data-id]').forEach((linha) => {
       const prova = provas.find((item) => item.id === linha.dataset.id);
-      linha.querySelector('[data-abrir]').addEventListener('click', () => abrirProva(prova));
-      linha.querySelector('[data-status]').addEventListener('change', (evento) => {
-        mudarStatus(prova, evento.target.value);
+      linha.querySelector('[data-abrir]').addEventListener('click', () => {
+        if (ehDirecao()) window.RevisaoDirecao?.abrir(prova);
+        else abrirProva(prova);
       });
+      const seletorStatus = linha.querySelector('[data-status]');
+      if (seletorStatus) {
+        seletorStatus.addEventListener('change', (evento) => {
+          mudarStatus(prova, evento.target.value);
+        });
+      }
     });
   }
 
@@ -191,6 +216,13 @@
     }
     if (existentes.length < (prova.questaoIds || []).length) {
       window.alert('Algumas questões desta prova foram excluídas do banco e ficaram de fora.');
+    }
+
+    // A Direção pode ter reprovado (ou deixado um comentário mesmo
+    // aprovando) — o professor precisa ver isso antes de continuar.
+    if (prova.comentarioCoordenador) {
+      const cabecalho = prova.status === 'reprovada' ? 'Prova reprovada pela Direção' : 'Comentário da Direção';
+      window.alert(`${cabecalho}:\n\n${prova.comentarioCoordenador}`);
     }
 
     Estado.selecionadas = existentes;

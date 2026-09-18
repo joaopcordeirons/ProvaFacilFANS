@@ -265,7 +265,12 @@ async function registrarUsoQuestoes(ids) {
 // Cada prova gerada (PDF ou DOCX) vira um documento em "provas". É o que
 // alimenta o Painel do professor: provas do semestre, quantas já foram
 // aprovadas pela direção e a lista das mais recentes.
-const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada'];
+const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada', 'reprovada'];
+
+// O professor só controla o começo do fluxo (rascunho → em análise). A
+// decisão final (aprovar/reprovar) é exclusiva da Direção, via revisarProva.
+const STATUS_PROFESSOR = ['rascunho', 'em_revisao'];
+const STATUS_REVISAO_COORDENADOR = ['aprovada', 'reprovada', 'em_revisao'];
 
 async function registrarProva(dados) {
   const banco = exigirFirestore();
@@ -283,6 +288,11 @@ async function registrarProva(dados) {
     quantidadeQuestoes: questaoIds.length,
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
     status: 'rascunho',
+    // Preenchidos só quando a Direção revisa (ver revisarProva).
+    comentarioCoordenador: '',
+    questoesReprovadas: [],
+    revisadoPorId: null,
+    revisadoEm: null,
     formatos: dados.formato ? [dados.formato] : [],
     criadoPorId: dados.criadoPorId || null,
     criadoEm: agora,
@@ -304,7 +314,18 @@ async function registrarProva(dados) {
 
   if (mesmasQuestoes) {
     const formatos = [...new Set([...(anterior.data().formatos || []), ...prova.formatos])];
-    await anterior.ref.update({ ...prova, formatos, status: anterior.data().status || 'rascunho', criadoEm: anterior.data().criadoEm });
+    await anterior.ref.update({
+      ...prova,
+      formatos,
+      status: anterior.data().status || 'rascunho',
+      // Regerar o arquivo (ex.: PDF depois do DOCX) não apaga a revisão
+      // que a Direção já tiver feito nesta prova.
+      comentarioCoordenador: anterior.data().comentarioCoordenador || '',
+      questoesReprovadas: anterior.data().questoesReprovadas || [],
+      revisadoPorId: anterior.data().revisadoPorId || null,
+      revisadoEm: anterior.data().revisadoEm || null,
+      criadoEm: anterior.data().criadoEm,
+    });
     return { id: anterior.id };
   }
 
@@ -340,8 +361,12 @@ function formatarProva(doc) {
     id: doc.id,
     ...dados,
     status: STATUS_PROVA.includes(dados.status) ? dados.status : 'rascunho',
+    comentarioCoordenador: dados.comentarioCoordenador || '',
+    questoesReprovadas: Array.isArray(dados.questoesReprovadas) ? dados.questoesReprovadas : [],
+    revisadoPorId: dados.revisadoPorId || null,
     criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
     atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
+    revisadoEm: dados.revisadoEm?.toDate?.()?.toISOString?.() || null,
   };
 }
 
@@ -354,11 +379,12 @@ async function buscarProvaPorId(id) {
   return doc.exists ? formatarProva(doc) : null;
 }
 
-// O fluxo de aprovação acontece fora do sistema (a direção assina o
-// caderno); aqui o professor só marca em que pé está.
+// O professor só marca em que pé está a preparação da prova (rascunho ou
+// enviada para análise) — quem decide aprovar/reprovar é a Direção, em
+// revisarProva.
 async function atualizarStatusProva(id, status) {
   validarId(id);
-  if (!STATUS_PROVA.includes(status)) {
+  if (!STATUS_PROFESSOR.includes(status)) {
     throw Object.assign(new Error('Status de prova inválido.'), { statusCode: 400 });
   }
   const banco = exigirFirestore();
@@ -369,6 +395,38 @@ async function atualizarStatusProva(id, status) {
   }
   await referencia.update({ status, atualizadoEm: admin.firestore.FieldValue.serverTimestamp() });
   return { id, status };
+}
+
+// A Direção aprova, reprova ou deixa a prova em análise. Registra um
+// comentário geral e, se for o caso, quais questões pesaram na
+// reprovação — o professor vê tudo isso assim que reabrir a prova.
+async function revisarProva(id, { status, comentario, questoesReprovadas, revisorId } = {}) {
+  validarId(id);
+  if (!STATUS_REVISAO_COORDENADOR.includes(status)) {
+    throw Object.assign(new Error('Status de revisão inválido.'), { statusCode: 400 });
+  }
+  const banco = exigirFirestore();
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+
+  // Só aceita sinalizar questões que realmente pertencem a esta prova.
+  const questaoIdsDaProva = new Set(documento.data().questaoIds || []);
+  const flags = Array.isArray(questoesReprovadas)
+    ? [...new Set(questoesReprovadas.filter((qid) => questaoIdsDaProva.has(qid)))]
+    : [];
+
+  await referencia.update({
+    status,
+    comentarioCoordenador: String(comentario || '').trim().slice(0, 2000),
+    questoesReprovadas: flags,
+    revisadoPorId: revisorId || null,
+    revisadoEm: admin.firestore.FieldValue.serverTimestamp(),
+    atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return formatarProva(await referencia.get());
 }
 
 async function excluirQuestao(id) {
@@ -391,5 +449,6 @@ module.exports = {
   listarProvas,
   buscarProvaPorId,
   atualizarStatusProva,
+  revisarProva,
   sanitizarHtml,
 };

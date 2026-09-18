@@ -26,6 +26,7 @@ const {
   listarProvas,
   buscarProvaPorId,
   atualizarStatusProva,
+  revisarProva,
 } = require('./firebase');
 const {
   criarUsuario,
@@ -595,8 +596,8 @@ app.get('/api/provas', async (req, res) => {
   }
 });
 
-// O professor marca em que pé está a prova (rascunho, em revisão,
-// aprovada pela direção).
+// O professor marca em que pé está a preparação da prova (rascunho ou
+// enviada para análise da Direção).
 app.patch('/api/provas/:id', express.json(), async (req, res) => {
   try {
     const existente = await buscarProvaPorId(req.params.id);
@@ -607,6 +608,32 @@ app.patch('/api/provas/:id', express.json(), async (req, res) => {
     return res.json(await atualizarStatusProva(req.params.id, (req.body || {}).status));
   } catch (err) {
     console.error('Erro ao atualizar a prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// A Direção aprova, reprova ou deixa a prova em análise — com um
+// comentário geral e, se reprovar, quais questões específicas pesaram na
+// decisão. Só quem tem perfil de Direção pode usar esta rota; o professor
+// só enxerga o resultado quando reabre a prova.
+app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req, res) => {
+  try {
+    if (req.usuario.perfil !== 'direcao') {
+      return res.status(403).json({ erro: 'Somente a Direção pode revisar provas.' });
+    }
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+
+    const { status, comentario, questoesReprovadas } = req.body || {};
+    const atualizada = await revisarProva(req.params.id, {
+      status,
+      comentario,
+      questoesReprovadas,
+      revisorId: req.usuarioId,
+    });
+    return res.json(atualizada);
+  } catch (err) {
+    console.error('Erro ao revisar a prova:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });
