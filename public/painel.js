@@ -125,7 +125,6 @@
       ? `${formatarPontos(prova.pontuacaoTotal)} pts`
       : '—';
     const direcao = ehDirecao();
-    const temComentario = Boolean(prova.comentarioCoordenador);
 
     // O status é só leitura pra todo mundo: quem decide é a Direção, na
     // tela de Revisão — o professor não tem como alterá-lo por aqui.
@@ -133,7 +132,7 @@
 
     return `
       <tr data-id="${escapeHtml(prova.id)}">
-        <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}${temComentario ? ' <span class="marca-comentario" title="Há um comentário da Direção sobre esta prova">💬</span>' : ''}</td>
+        <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}</td>
         <td data-th="Disciplina">${escapeHtml(prova.curso || '—')}</td>
         <td class="numerica" data-th="Questões">${escapeHtml(String(prova.quantidadeQuestoes || 0))}</td>
         <td class="numerica" data-th="Valor">${escapeHtml(valor)}</td>

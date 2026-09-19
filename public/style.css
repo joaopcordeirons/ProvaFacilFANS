@@ -705,47 +705,41 @@
   }
   table.tabela-provas .acao button:hover { color: var(--accent); }
 
-  /* O status é editável: a aprovação acontece fora do sistema e o
-     professor registra aqui em que pé a prova está. */
-  .status-prova {
-    appearance: none; border-radius: 999px; padding: 0.25rem 1.5rem 0.25rem 0.75rem;
-    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
-    text-transform: uppercase; cursor: pointer; background: var(--surface);
-    border: 1px solid var(--rule-strong); color: var(--ink-muted);
-    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
-                      linear-gradient(135deg, currentColor 50%, transparent 50%);
-    background-position: right 0.7rem center, right 0.45rem center;
-    background-size: 4px 4px, 4px 4px; background-repeat: no-repeat;
-  }
-  .status-prova.aprovada { border-color: var(--moss); background-color: var(--moss-soft); color: var(--moss); }
-  .status-prova.revisao { border-color: var(--amber); background-color: var(--amber-soft); color: var(--amber); }
-  .status-prova.rascunho { border-style: dashed; }
-  .status-prova.reprovada { border-color: var(--claret); background-color: var(--claret-soft); color: var(--claret); }
-
-  /* Status como rótulo fixo (tela da Direção — a decisão é tomada na
-     revisão, não neste seletor solto) */
+  /* Status como rótulo fixo — ninguém edita por aqui (nem professor, nem
+     Direção); a decisão é sempre tomada na tela de Revisão. Feito pra
+     saltar aos olhos na tabela: preenchido, não só contorno. */
   .status-badge {
-    display: inline-block; border-radius: 999px; padding: 0.25rem 0.75rem;
-    font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.08em;
-    text-transform: uppercase; border: 1px solid var(--rule-strong); color: var(--ink-muted);
+    display: inline-block; border-radius: 999px; padding: 0.32rem 0.9rem;
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; border: 1.5px solid var(--rule-strong);
+    color: var(--ink-muted); background: var(--surface);
   }
-  .status-badge.aprovada { border-color: var(--moss); background-color: var(--moss-soft); color: var(--moss); }
-  .status-badge.revisao { border-color: var(--amber); background-color: var(--amber-soft); color: var(--amber); }
-  .status-badge.reprovada { border-color: var(--claret); background-color: var(--claret-soft); color: var(--claret); }
+  .status-badge.aprovada { border-color: var(--moss); background-color: var(--moss); color: #fff; }
+  .status-badge.revisao { border-color: var(--amber); background-color: var(--amber); color: #fff; }
+  .status-badge.reprovada { border-color: var(--claret); background-color: var(--claret); color: #fff; }
   .status-badge.rascunho { border-style: dashed; }
-
-  .marca-comentario { font-size: 0.8rem; margin-left: 0.3rem; cursor: help; }
 
   /* ---------- Drawer "Revisão da Direção" ---------- */
   .drawer-subtitulo { margin-top: 0.2rem; font-size: 0.82rem; color: var(--ink-muted); }
+
+  /* Aviso de revisão: tanto o card do drawer da Direção quanto o rodapé
+     do passo 3 (professor). Precisa ser impossível de não notar. */
   .aviso-revisao {
-    border: 1px solid var(--rule-strong); border-radius: 8px; padding: 0.8rem 0.95rem;
-    margin-bottom: 1.15rem; font-size: 0.84rem; color: var(--ink-muted); background: var(--paper);
+    border: 2px solid var(--rule-strong); border-left-width: 6px; border-radius: 8px;
+    padding: 1.1rem 1.25rem; margin-top: 1.25rem; margin-bottom: 1.15rem;
+    font-size: 0.95rem; line-height: 1.5; color: var(--ink-muted); background: var(--paper);
   }
   .aviso-revisao.oculto { display: none; }
-  .aviso-revisao strong { color: var(--ink); }
-  .aviso-revisao.reprovada { border-color: var(--claret); background: var(--claret-soft); color: var(--claret); }
-  .aviso-revisao.aprovada { border-color: var(--moss); background: var(--moss-soft); color: var(--moss); }
+  .aviso-revisao strong {
+    display: block; margin-bottom: 0.3rem; font-size: 1.05rem;
+    text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink);
+  }
+  .aviso-revisao.reprovada { border-color: var(--claret); background: var(--claret-soft); color: var(--ink); }
+  .aviso-revisao.reprovada strong { color: var(--claret); }
+  .aviso-revisao.aprovada { border-color: var(--moss); background: var(--moss-soft); color: var(--ink); }
+  .aviso-revisao.aprovada strong { color: var(--moss); }
+  .aviso-revisao.revisao { border-color: var(--amber); background: var(--amber-soft); color: var(--ink); }
+  .aviso-revisao.revisao strong { color: var(--amber); }
 
   .item-revisao-check { display: flex; align-items: flex-start; gap: 0.5rem;
     padding: 0.4rem 0.5rem; border-top: 1px dashed var(--rule);
@@ -990,7 +984,7 @@
     table.tabela-provas td[data-th=""]::before { content: none; }
     table.tabela-provas td.prova-titulo { font-size: 1rem; padding-bottom: 0.5rem; border-bottom: 1px dashed var(--rule); margin-bottom: 0.35rem; }
     table.tabela-provas td.acao { justify-content: flex-end; }
-    table.tabela-provas .status-prova { width: 100%; max-width: 180px; }
+    table.tabela-provas .status-badge { width: 100%; max-width: 180px; text-align: center; }
 
     /* Drawer lateral e modais ocupam a tela toda / se ajustam */
     .drawer-tabs { gap: 1rem; }

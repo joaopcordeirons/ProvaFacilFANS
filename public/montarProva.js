@@ -140,7 +140,13 @@
     renderizarRevisao();
   }
 
-  const STATUS_ROTULO_FEEDBACK = { reprovada: 'Reprovada', aprovada: 'Aprovada', em_revisao: 'Em análise' };
+  const STATUS_ROTULO_FEEDBACK = {
+    reprovada: 'Reprovada pela Direção',
+    aprovada: 'Aprovada pela Direção',
+    em_revisao: 'Em análise pela Direção',
+    rascunho: 'Observação da Direção',
+  };
+  const STATUS_CLASSE_FEEDBACK = { reprovada: 'reprovada', aprovada: 'aprovada', em_revisao: 'revisao' };
   const avisoFeedbackEl = document.getElementById('avisoFeedbackDirecao');
 
   function renderizarAvisoFeedback() {
@@ -151,11 +157,10 @@
       avisoFeedbackEl.innerHTML = '';
       return;
     }
-    const rotulo = STATUS_ROTULO_FEEDBACK[feedback.status] || feedback.status;
-    const classeExtra = feedback.status === 'reprovada' ? 'reprovada' : (feedback.status === 'aprovada' ? 'aprovada' : '');
-    avisoFeedbackEl.className = `aviso-revisao ${classeExtra}`;
-    avisoFeedbackEl.innerHTML = `<strong>${escapeHtml(rotulo)} pela Direção.</strong>`
-      + (feedback.comentario ? ` ${escapeHtml(feedback.comentario)}` : '')
+    const rotulo = STATUS_ROTULO_FEEDBACK[feedback.status] || STATUS_ROTULO_FEEDBACK.rascunho;
+    avisoFeedbackEl.className = `aviso-revisao ${STATUS_CLASSE_FEEDBACK[feedback.status] || ''}`;
+    avisoFeedbackEl.innerHTML = `<strong>${escapeHtml(rotulo)}</strong>`
+      + (feedback.comentario ? escapeHtml(feedback.comentario) : 'Nenhum comentário foi deixado.')
       + (feedback.questoesReprovadas.length
         ? ` ${feedback.questoesReprovadas.length === 1 ? 'A questão sinalizada está marcada' : 'As questões sinalizadas estão marcadas'} abaixo.`
         : '');

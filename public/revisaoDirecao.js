@@ -15,6 +15,7 @@
   const STATUS_ROTULO = {
     rascunho: 'Rascunho', em_revisao: 'Em análise', aprovada: 'Aprovada', reprovada: 'Reprovada',
   };
+  const STATUS_CLASSE = { reprovada: 'reprovada', aprovada: 'aprovada', em_revisao: 'revisao' };
 
   const overlayEl = document.getElementById('drawerRevisaoOverlay');
   const drawerEl = document.getElementById('drawerRevisao');
@@ -43,14 +44,13 @@
 
   function renderizarAvisoAnterior(prova) {
     if (!prova.revisadoEm) {
-      avisoAnteriorEl.classList.add('oculto');
       avisoAnteriorEl.className = 'aviso-revisao oculto';
       avisoAnteriorEl.innerHTML = '';
       return;
     }
-    avisoAnteriorEl.className = `aviso-revisao ${prova.status === 'reprovada' ? 'reprovada' : (prova.status === 'aprovada' ? 'aprovada' : '')}`;
-    avisoAnteriorEl.innerHTML = `Já revisada — status atual: <strong>${escapeHtml(STATUS_ROTULO[prova.status] || prova.status)}</strong>.`
-      + (prova.comentarioCoordenador ? ` Último comentário: "${escapeHtml(prova.comentarioCoordenador)}"` : '');
+    avisoAnteriorEl.className = `aviso-revisao ${STATUS_CLASSE[prova.status] || ''}`;
+    avisoAnteriorEl.innerHTML = `<strong>Já revisada: ${escapeHtml(STATUS_ROTULO[prova.status] || prova.status)}</strong>`
+      + (prova.comentarioCoordenador ? `Último comentário: "${escapeHtml(prova.comentarioCoordenador)}"` : 'Nenhum comentário foi deixado.');
   }
 
   function renderizarLista(prova) {
