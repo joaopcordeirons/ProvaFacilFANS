@@ -281,9 +281,13 @@
 
       // O servidor devolve o ID da prova registrada num cabeçalho (a
       // resposta em si é o arquivo binário) — próximas ações (salvar,
-      // enviar, gerar o outro formato) atualizam o mesmo registro.
+      // enviar, gerar o outro formato) atualizam o mesmo registro. Uma
+      // prova que ainda não existia nasce em rascunho.
       const idRegistrado = resposta.headers.get('X-Prova-Id');
-      if (idRegistrado) Estado.provaAtualId = idRegistrado;
+      if (idRegistrado) {
+        if (!Estado.provaAtualId) Estado.provaAtualStatus = 'rascunho';
+        Estado.provaAtualId = idRegistrado;
+      }
 
       const blob = await resposta.blob();
       if (urlArquivoAtual) URL.revokeObjectURL(urlArquivoAtual);
@@ -333,32 +337,33 @@
 
   /* ------------------------------- salvar rascunho / enviar ao coordenador */
 
-  // Fica true assim que a prova é enviada com sucesso nesta sessão: a
-  // partir daí ela não é mais um rascunho, então "Salvar rascunho" e
-  // "Enviar" ficam desativados (gerar o arquivo continua liberado).
-  let provaTravada = false;
-
   // Usada tanto por "Salvar rascunho" quanto por "Enviar para o
   // coordenador" — a única diferença entre as duas ações é o endpoint.
+  // Só reaproveita o ID da prova atual se ela ainda for um rascunho: uma
+  // prova já enviada para o coordenador nunca é editada por aqui — uma
+  // correção depois disso sempre vira uma prova nova.
   async function enviarAcaoProva(endpoint, { rotuloCarregando, aoConcluir }) {
     const ids = Estado.selecionadas.slice();
-    if (!ids.length || provaTravada) return;
+    if (!ids.length) return;
 
     const botoes = [btnSalvarRascunhoEl, btnEnviarCoordenadorEl];
     botoes.forEach((botao) => { botao.disabled = true; });
     statusEnvioEl.textContent = rotuloCarregando;
     statusEnvioEl.className = 'status';
 
+    const idEditavel = Estado.provaAtualStatus === 'rascunho' ? Estado.provaAtualId : undefined;
+
     try {
       const dados = dadosDoCabecalho();
       const prova = await window.App.pedirJson(`/api/provas/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...dados, questaoIds: ids, id: Estado.provaAtualId || undefined }),
+        body: JSON.stringify({ ...dados, questaoIds: ids, id: idEditavel }),
       });
 
       Estado.provaAtualId = prova.id;
-      aoConcluir(prova);
+      Estado.provaAtualStatus = prova.status;
+      aoConcluir(prova, Boolean(idEditavel));
 
       window.App.carregarQuestoes();
       window.Painel?.renderizar();
@@ -366,15 +371,17 @@
       statusEnvioEl.textContent = err.message;
       statusEnvioEl.className = 'status erro';
     } finally {
-      if (!provaTravada) botoes.forEach((botao) => { botao.disabled = false; });
+      botoes.forEach((botao) => { botao.disabled = false; });
     }
   }
 
   function salvarRascunho() {
     enviarAcaoProva('rascunho', {
       rotuloCarregando: 'Salvando rascunho...',
-      aoConcluir: () => {
-        statusEnvioEl.textContent = 'Rascunho salvo. Só você vê essa prova até enviá-la para o coordenador.';
+      aoConcluir: (prova, eraEdicao) => {
+        statusEnvioEl.textContent = eraEdicao
+          ? 'Rascunho salvo. Só você vê essa prova até enviá-la para o coordenador.'
+          : 'Salvo como uma nova prova (a versão que o coordenador já viu, se houver, continua do jeito que estava).';
         statusEnvioEl.className = 'status ok';
       },
     });
@@ -384,9 +391,6 @@
     enviarAcaoProva('enviar', {
       rotuloCarregando: 'Enviando para o coordenador...',
       aoConcluir: () => {
-        provaTravada = true;
-        btnSalvarRascunhoEl.disabled = true;
-        btnEnviarCoordenadorEl.disabled = true;
         statusEnvioEl.textContent = 'Prova enviada para o coordenador. Ela virou só leitura por aqui — acompanhe a revisão pelo Painel.';
         statusEnvioEl.className = 'status ok';
       },
@@ -408,12 +412,19 @@
   if (!campoData.value) campoData.value = new Date().toISOString().slice(0, 10);
 
   // Chamado pelo Painel ao começar uma prova nova ou reabrir uma
-  // existente, para que o estado de "já enviada" da prova anterior não
-  // vaze para a próxima.
-  function resetarEnvio() {
-    provaTravada = false;
-    statusEnvioEl.textContent = '';
-    statusEnvioEl.className = 'status';
+  // existente, para que o aviso de status da prova anterior não vaze
+  // para a próxima. Passar o status de uma prova já enviada mostra um
+  // aviso: salvar ou enviar a partir daqui cria uma prova nova, sem
+  // mexer na que o coordenador já viu.
+  function resetarEnvio(status) {
+    if (status && status !== 'rascunho') {
+      statusEnvioEl.textContent = 'Esta prova já foi enviada para o coordenador e ficou só leitura. '
+        + 'Ajuste o que for preciso e use "Salvar rascunho" ou "Enviar" — isso cria uma prova nova, sem alterar a que já foi revisada.';
+      statusEnvioEl.className = 'status';
+    } else {
+      statusEnvioEl.textContent = '';
+      statusEnvioEl.className = 'status';
+    }
   }
 
   window.MontagemProva = { renderizarMontagem, renderizarRevisao, resetarEnvio };

@@ -26,6 +26,12 @@ const Estado = {
   // gerar outro formato) atualize o mesmo registro em vez de duplicá-lo.
   // Fica null enquanto a prova ainda não foi salva nenhuma vez.
   provaAtualId: null,
+  // Status da prova referenciada por provaAtualId, tal como veio do
+  // servidor da última vez ('rascunho' quando ainda dá para editar).
+  // Junto com provaAtualId decide se a próxima ação (salvar/enviar)
+  // atualiza esse registro ou cria um novo — nunca escreve por cima de
+  // uma prova que não é mais um rascunho.
+  provaAtualStatus: null,
 };
 
 // Lista fixa de cursos/períodos, carregada uma vez de /api/constantes e

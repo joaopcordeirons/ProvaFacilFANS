@@ -255,14 +255,11 @@
       }
       : null;
 
-    // Só continua editando o mesmo registro se ele ainda for um rascunho.
-    // Uma prova já enviada (em análise, aprovada ou reprovada) é só
-    // leitura a partir daqui — corrigir e mandar de novo cria uma nova
-    // prova, deixando a que o coordenador já viu do jeito que estava.
-    Estado.provaAtualId = prova.status === 'rascunho' ? prova.id : null;
+    Estado.provaAtualId = prova.id;
+    Estado.provaAtualStatus = prova.status;
     Estado.selecionadas = existentes;
     window.App.salvarSelecao();
-    window.MontagemProva?.resetarEnvio();
+    window.MontagemProva?.resetarEnvio(prova.status);
     renderizarBanco();
     mostrarView('revisao');
   }
@@ -299,6 +296,7 @@
   document.getElementById('btnCriarProva').addEventListener('click', () => {
     Estado.provaFeedback = null;
     Estado.provaAtualId = null;
+    Estado.provaAtualStatus = null;
     window.MontagemProva?.resetarEnvio();
     mostrarView('montar');
   });
