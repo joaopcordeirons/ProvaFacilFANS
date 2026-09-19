@@ -434,16 +434,14 @@ function confirmarExclusaoEmLote() {
   document.getElementById('btnConfirmarExclusaoLote').addEventListener('click', async (evento) => {
     evento.target.disabled = true;
     const ids = [...idsParaExcluirDoBanco];
-    const erros = [];
-    for (const id of ids) {
-      try {
-        // eslint-disable-next-line no-await-in-loop -- exclusões vão uma
-        // de cada vez para um erro isolado não derrubar as outras.
-        await pedirJson(`/api/questoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      } catch (err) {
-        erros.push(err.message);
-      }
-    }
+    // Em paralelo — Promise.allSettled não deixa uma exclusão que falhar
+    // derrubar as outras, mas não fica esperando uma de cada vez.
+    const resultados = await Promise.allSettled(
+      ids.map((id) => pedirJson(`/api/questoes/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+    );
+    const erros = resultados
+      .filter((resultado) => resultado.status === 'rejected')
+      .map((resultado) => resultado.reason?.message || 'Falha desconhecida.');
 
     idsParaExcluirDoBanco.clear();
     modoExclusaoBanco = false;
