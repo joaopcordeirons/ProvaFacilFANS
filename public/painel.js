@@ -259,7 +259,7 @@
     Estado.provaAtualStatus = prova.status;
     Estado.selecionadas = existentes;
     window.App.salvarSelecao();
-    window.MontagemProva?.resetarEnvio(prova.status);
+    window.MontagemProva?.resetarEnvio();
     renderizarBanco();
     mostrarView('revisao');
   }

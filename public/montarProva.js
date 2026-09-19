@@ -26,6 +26,13 @@
   const painelPreviaPdfEl = document.getElementById('painelPreviaPdf');
   const btnSalvarRascunhoEl = document.getElementById('btnSalvarRascunho');
   const btnEnviarCoordenadorEl = document.getElementById('btnEnviarCoordenador');
+  const avisoProvaTravadaEl = document.getElementById('avisoProvaTravada');
+  const btnDuplicarProvaEl = document.getElementById('btnDuplicarProva');
+  const btnAdicionarMaisEl = document.getElementById('btnAdicionarMais');
+  const CAMPOS_CABECALHO_IDS = [
+    'campoTitulo', 'campoCurso', 'campoPeriodo', 'campoEtapa', 'campoData',
+    'campoValorProva', 'campoProfessor', 'campoInstrucoes', 'campoLinhas',
+  ];
 
   let urlArquivoAtual = null;
 
@@ -169,10 +176,34 @@
         : '');
   }
 
+  // Uma prova só é editável de verdade enquanto ainda for um rascunho —
+  // depois de enviada, a tela vira só leitura (ver aplicarTravamento).
+  function provaEstaTravada() {
+    return Boolean(Estado.provaAtualStatus) && Estado.provaAtualStatus !== 'rascunho';
+  }
+
+  // Desabilita o cabeçalho e as ações que alterariam a prova enviada;
+  // "Duplicar como nova prova" é o único jeito de voltar a editar. Some
+  // Salvar/Enviar da tela em vez de só desabilitar — botão apagado do
+  // lado do aviso não ajudava em nada.
+  function aplicarTravamento() {
+    const travada = provaEstaTravada();
+    avisoProvaTravadaEl.classList.toggle('oculto', !travada);
+    btnSalvarRascunhoEl.classList.toggle('oculto', travada);
+    btnEnviarCoordenadorEl.classList.toggle('oculto', travada);
+    CAMPOS_CABECALHO_IDS.forEach((id) => {
+      const campo = document.getElementById(id);
+      if (campo) campo.disabled = travada;
+    });
+    btnAdicionarMaisEl.disabled = travada;
+    return travada;
+  }
+
   function renderizarRevisao() {
     if (!listaRevisaoEl) return;
     prepararCabecalhoProva();
     renderizarAvisoFeedback();
+    const travada = aplicarTravamento();
 
     const selecionadas = questoesSelecionadas();
     const flags = new Set(Estado.provaFeedback?.questoesReprovadas || []);
@@ -189,8 +220,8 @@
 
     document.getElementById('btnGerarPdf').disabled = false;
     document.getElementById('btnGerarDocx').disabled = false;
-    btnSalvarRascunhoEl.disabled = false;
-    btnEnviarCoordenadorEl.disabled = false;
+    btnSalvarRascunhoEl.disabled = travada;
+    btnEnviarCoordenadorEl.disabled = travada;
     listaRevisaoEl.innerHTML = selecionadas.map((questao, indice) => `
       <article class="item-revisao ${flags.has(questao.id) ? 'reprovada-pela-direcao' : ''}" data-id="${escapeHtml(questao.id)}">
         <div class="ordem">${indice + 1}</div>
@@ -204,9 +235,9 @@
           <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 180) || '(vazio)')}</p>
         </div>
         <div class="item-controles">
-          <button type="button" data-mover="-1" aria-label="Subir" ${indice === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" data-mover="1" aria-label="Descer" ${indice === selecionadas.length - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" data-remover aria-label="Tirar da prova">✕</button>
+          <button type="button" data-mover="-1" aria-label="Subir" ${indice === 0 || travada ? 'disabled' : ''}>↑</button>
+          <button type="button" data-mover="1" aria-label="Descer" ${indice === selecionadas.length - 1 || travada ? 'disabled' : ''}>↓</button>
+          <button type="button" data-remover aria-label="Tirar da prova" ${travada ? 'disabled' : ''}>✕</button>
         </div>
       </article>
     `).join('');
@@ -344,7 +375,7 @@
   // correção depois disso sempre vira uma prova nova.
   async function enviarAcaoProva(endpoint, { rotuloCarregando, aoConcluir }) {
     const ids = Estado.selecionadas.slice();
-    if (!ids.length) return;
+    if (!ids.length || provaEstaTravada()) return;
 
     const botoes = [btnSalvarRascunhoEl, btnEnviarCoordenadorEl];
     botoes.forEach((botao) => { botao.disabled = true; });
@@ -380,8 +411,8 @@
       rotuloCarregando: 'Salvando rascunho...',
       aoConcluir: (prova, eraEdicao) => {
         statusEnvioEl.textContent = eraEdicao
-          ? 'Rascunho salvo. Só você vê essa prova até enviá-la para o coordenador.'
-          : 'Salvo como uma nova prova (a versão que o coordenador já viu, se houver, continua do jeito que estava).';
+          ? 'Rascunho salvo.'
+          : 'Rascunho criado. Você já pode continuar editando e salvando por aqui.';
         statusEnvioEl.className = 'status ok';
       },
     });
@@ -397,6 +428,18 @@
     });
   }
 
+  // "Duplicar como nova prova": única saída da tela travada. Esquece o
+  // vínculo com a prova enviada — o que já estiver no formulário (mesmas
+  // questões, mesmo cabeçalho) vira o ponto de partida de uma prova nova,
+  // sem tocar na que o coordenador já revisou.
+  function duplicarProva() {
+    Estado.provaAtualId = null;
+    Estado.provaAtualStatus = null;
+    statusEnvioEl.textContent = 'Duplicado. Esta agora é uma prova nova — edite à vontade e salve ou envie quando quiser.';
+    statusEnvioEl.className = 'status ok';
+    renderizarRevisao();
+  }
+
   /* --------------------------------------------- ligações de tela */
 
   document.getElementById('btnContinuarRevisao').addEventListener('click', () => mostrarView('revisao'));
@@ -406,25 +449,19 @@
   document.getElementById('btnGerarDocx').addEventListener('click', () => gerarProva('docx'));
   btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
   btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
+  btnDuplicarProvaEl.addEventListener('click', duplicarProva);
 
   // Data de hoje já preenchida no cabeçalho da prova.
   const campoData = document.getElementById('campoData');
   if (!campoData.value) campoData.value = new Date().toISOString().slice(0, 10);
 
   // Chamado pelo Painel ao começar uma prova nova ou reabrir uma
-  // existente, para que o aviso de status da prova anterior não vaze
-  // para a próxima. Passar o status de uma prova já enviada mostra um
-  // aviso: salvar ou enviar a partir daqui cria uma prova nova, sem
-  // mexer na que o coordenador já viu.
-  function resetarEnvio(status) {
-    if (status && status !== 'rascunho') {
-      statusEnvioEl.textContent = 'Esta prova já foi enviada para o coordenador e ficou só leitura. '
-        + 'Ajuste o que for preciso e use "Salvar rascunho" ou "Enviar" — isso cria uma prova nova, sem alterar a que já foi revisada.';
-      statusEnvioEl.className = 'status';
-    } else {
-      statusEnvioEl.textContent = '';
-      statusEnvioEl.className = 'status';
-    }
+  // existente, para que a mensagem da prova anterior não vaze para a
+  // próxima. O travamento em si (aviso, campos desabilitados) é decidido
+  // dentro de renderizarRevisao, a partir de Estado.provaAtualStatus.
+  function resetarEnvio() {
+    statusEnvioEl.textContent = '';
+    statusEnvioEl.className = 'status';
   }
 
   window.MontagemProva = { renderizarMontagem, renderizarRevisao, resetarEnvio };

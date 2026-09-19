@@ -199,6 +199,12 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
           <label class="campo">Linhas de resposta (dissertativas)
             <input type="number" id="campoLinhas" min="0" max="20" value="5">
           </label>
+          <div class="aviso-travada oculto" id="avisoProvaTravada">
+            <strong>Prova já enviada — só leitura</strong>
+            <p>Esta prova já foi enviada para o coordenador e não pode mais ser alterada. Para corrigir algo, duplique-a como uma prova nova.</p>
+            <button type="button" class="btn-secundario largo" id="btnDuplicarProva">Duplicar como nova prova</button>
+          </div>
+
           <button type="button" class="btn-secundario largo" id="btnSalvarRascunho">Salvar rascunho</button>
           <button type="button" class="btn-escuro largo" id="btnEnviarCoordenador">Enviar para o coordenador</button>
           <div class="status" id="statusEnvio"></div>

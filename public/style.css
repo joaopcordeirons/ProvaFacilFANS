@@ -257,6 +257,18 @@
     color: var(--ink-faint);
   }
 
+  .aviso-travada {
+    margin-bottom: 0.9rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid var(--amber);
+    background: var(--amber-soft);
+    border-radius: 8px;
+    font-size: 0.82rem;
+  }
+  .aviso-travada strong { display: block; color: var(--amber); margin-bottom: 0.25rem; }
+  .aviso-travada p { margin: 0 0 0.7rem; color: var(--ink); }
+  .aviso-travada .btn-secundario { margin: 0; }
+
   .resultado h2 {
     font-size: 1rem;
     margin: 0 0 0.5rem;
