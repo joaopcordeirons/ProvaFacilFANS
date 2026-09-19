@@ -255,12 +255,6 @@
       }
       : null;
 
-    // Reabrir uma prova já registrada não deveria obrigar a gerar o
-    // arquivo de novo só pra habilitar o botão "Enviar para o
-    // coordenador" — o passo de revisão lê isso e já mostra o botão
-    // se ainda for rascunho (ver montarProva.js).
-    Estado.provaAtual = { id: prova.id, status: prova.status };
-
     Estado.selecionadas = existentes;
     window.App.salvarSelecao();
     renderizarBanco();
@@ -298,7 +292,6 @@
 
   document.getElementById('btnCriarProva').addEventListener('click', () => {
     Estado.provaFeedback = null;
-    Estado.provaAtual = null;
     mostrarView('montar');
   });
 
