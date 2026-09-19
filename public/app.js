@@ -20,6 +20,12 @@ const Estado = {
   // Usado pelo passo de revisão da montagem para mostrar o aviso e marcar
   // as questões sinalizadas. Fica null numa prova nova.
   provaFeedback: null,
+  // ID da prova que está sendo montada nesta sessão, uma vez que ela já
+  // tenha sido salva como rascunho, enviada para o coordenador ou tido um
+  // arquivo gerado — para que a próxima ação (salvar de novo, enviar,
+  // gerar outro formato) atualize o mesmo registro em vez de duplicá-lo.
+  // Fica null enquanto a prova ainda não foi salva nenhuma vez.
+  provaAtualId: null,
 };
 
 // Lista fixa de cursos/períodos, carregada uma vez de /api/constantes e

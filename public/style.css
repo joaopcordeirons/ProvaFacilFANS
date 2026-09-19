@@ -246,6 +246,17 @@
   .status.erro { color: var(--claret); }
   .status.ok { color: var(--moss); }
 
+  .separador-acoes {
+    margin: 1.1rem 0 0.7rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--rule);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: center;
+    color: var(--ink-faint);
+  }
+
   .resultado h2 {
     font-size: 1rem;
     margin: 0 0 0.5rem;

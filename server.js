@@ -23,6 +23,8 @@ const {
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
   registrarProva,
+  salvarRascunho,
+  enviarParaCoordenador,
   listarProvas,
   buscarProvaPorId,
   revisarProva,
@@ -519,28 +521,66 @@ function dadosDaProva(corpo, questoes) {
   };
 }
 
+// Validação comum às três ações do Passo 3 (gerar arquivo, salvar
+// rascunho, enviar para o coordenador): confere o limite de questões, se
+// o professor leciona no curso da prova e busca as questões escolhidas,
+// garantindo que nenhuma delas seja de um curso fora do seu acesso.
+// Lança um erro com statusCode quando algo está inválido.
+async function validarESelecionarQuestoes(req, corpo) {
+  const { questaoIds } = corpo;
+  if (!Array.isArray(questaoIds) || questaoIds.length === 0) {
+    throw Object.assign(new Error('Selecione pelo menos uma questão para montar a prova.'), { statusCode: 400 });
+  }
+  if (questaoIds.length > 60) {
+    throw Object.assign(new Error('Uma prova pode ter no máximo 60 questões.'), { statusCode: 400 });
+  }
+
+  const cursoProva = corpo.curso || corpo.disciplina;
+  if (!podeUsarCurso(req, cursoProva)) {
+    throw Object.assign(new Error('Você não leciona nesse curso.'), { statusCode: 403 });
+  }
+
+  if (corpo.id) {
+    const existente = await buscarProvaPorId(corpo.id);
+    if (!existente) throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+    if (!podeUsarCurso(req, existente.curso)) {
+      throw Object.assign(new Error('Você não leciona nesse curso.'), { statusCode: 403 });
+    }
+  }
+
+  const questoes = await buscarQuestoesPorIds(questaoIds);
+  const foraDoCurso = questoes.find((questao) => !podeUsarCurso(req, questao.curso));
+  if (foraDoCurso) {
+    throw Object.assign(
+      new Error('Uma ou mais questões selecionadas não pertencem a um curso que você leciona.'),
+      { statusCode: 403 },
+    );
+  }
+  return questoes;
+}
+
+// Os campos que salvarRascunho/enviarParaCoordenador/registrarProva
+// gravam no Firestore — separado de dadosDaProva porque este último
+// monta os dados para o *arquivo* (inclui o texto de cada questão), e
+// este monta os dados para o *registro* no Painel (só os IDs).
+function dadosParaRegistro(corpo, questoes, req) {
+  return {
+    id: corpo.id || undefined,
+    titulo: corpo.titulo,
+    curso: corpo.curso || corpo.disciplina,
+    periodo: corpo.periodo || corpo.turma,
+    etapa: corpo.etapa,
+    data: corpo.data,
+    questaoIds: questoes.map((questao) => questao.id),
+    pontuacaoTotal: questoes.reduce((soma, questao) => soma + Number(questao.valor || 0), 0),
+    criadoPorId: req.usuarioId,
+  };
+}
+
 async function gerarProva(req, res, formato) {
   try {
     const corpo = req.body || {};
-    const { questaoIds } = corpo;
-
-    if (!Array.isArray(questaoIds) || questaoIds.length === 0) {
-      return res.status(400).json({ erro: 'Selecione pelo menos uma questão para montar a prova.' });
-    }
-    if (questaoIds.length > 60) {
-      return res.status(400).json({ erro: 'Uma prova pode ter no máximo 60 questões.' });
-    }
-
-    const cursoProva = corpo.curso || corpo.disciplina;
-    if (!podeUsarCurso(req, cursoProva)) {
-      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
-    }
-
-    const questoes = await buscarQuestoesPorIds(questaoIds);
-    const foraDoCurso = questoes.find((questao) => !podeUsarCurso(req, questao.curso));
-    if (foraDoCurso) {
-      return res.status(403).json({ erro: 'Uma ou mais questões selecionadas não pertencem a um curso que você leciona.' });
-    }
+    const questoes = await validarESelecionarQuestoes(req, corpo);
 
     const dados = dadosDaProva(corpo, questoes);
     const arquivo = formato === 'docx'
@@ -550,19 +590,12 @@ async function gerarProva(req, res, formato) {
     await registrarUsoQuestoes(questoes.map((questao) => questao.id));
 
     // O registro alimenta o Painel do professor. Falhar aqui não invalida
-    // um arquivo que já foi gerado — o download continua.
+    // um arquivo que já foi gerado — o download continua. Gerar o
+    // arquivo é só um download: não envia nada para o coordenador.
+    let provaId = corpo.id || null;
     try {
-      await registrarProva({
-        titulo: dados.titulo,
-        curso: dados.curso,
-        periodo: dados.periodo,
-        etapa: dados.etapa,
-        data: dados.data,
-        formato,
-        questaoIds: questoes.map((questao) => questao.id),
-        pontuacaoTotal: questoes.reduce((soma, questao) => soma + Number(questao.valor || 0), 0),
-        criadoPorId: req.usuarioId,
-      });
+      const prova = await registrarProva({ ...dadosParaRegistro(corpo, questoes, req), formato });
+      provaId = prova.id;
     } catch (err) {
       console.warn('Não foi possível registrar a prova no painel:', err.message);
     }
@@ -570,6 +603,10 @@ async function gerarProva(req, res, formato) {
     res.setHeader('Content-Type', MIME_SAIDA[formato]);
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo(corpo.titulo, formato)}"`);
     res.setHeader('Content-Length', arquivo.length);
+    if (provaId) {
+      res.setHeader('X-Prova-Id', provaId);
+      res.setHeader('Access-Control-Expose-Headers', 'X-Prova-Id');
+    }
     return res.end(arquivo);
   } catch (err) {
     console.error(`Erro ao gerar a prova em ${formato.toUpperCase()}:`, err.message);
@@ -582,23 +619,59 @@ async function gerarProva(req, res, formato) {
 app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'pdf'));
 app.post('/api/provas/gerar-docx', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'docx'));
 
-// Provas já geradas, para o Painel do professor.
+// "Salvar rascunho": grava o cabeçalho e as questões escolhidas sem
+// enviar nada para a Direção. Sem corpo.id cria uma prova nova; com
+// corpo.id atualiza o rascunho já salvo antes.
+app.post('/api/provas/rascunho', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const corpo = req.body || {};
+    const questoes = await validarESelecionarQuestoes(req, corpo);
+    const prova = await salvarRascunho(dadosParaRegistro(corpo, questoes, req));
+    return res.status(corpo.id ? 200 : 201).json(prova);
+  } catch (err) {
+    console.error('Erro ao salvar rascunho da prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// "Enviar para o coordenador": ação explícita do professor — sem ela a
+// prova fica em rascunho, só visível para ele mesmo, e a Direção nunca
+// fica sabendo que ela existe.
+app.post('/api/provas/enviar', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const corpo = req.body || {};
+    const questoes = await validarESelecionarQuestoes(req, corpo);
+    const prova = await enviarParaCoordenador(dadosParaRegistro(corpo, questoes, req));
+    return res.status(corpo.id ? 200 : 201).json(prova);
+  } catch (err) {
+    console.error('Erro ao enviar a prova para o coordenador:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Provas já geradas, para o Painel do professor. A Direção só enxerga
+// provas que já foram enviadas — rascunhos são só do professor até ele
+// decidir enviar.
 app.get('/api/provas', async (req, res) => {
   try {
     const limiteInformado = Number.parseInt(req.query.limite, 10);
     const limite = Number.isFinite(limiteInformado)
       ? Math.min(Math.max(limiteInformado, 1), 50)
       : 20;
-    return res.json({ provas: await listarProvas(limite, req.cursosPermitidos) });
+    const provas = await listarProvas(limite, req.cursosPermitidos);
+    const visiveis = req.usuario.perfil === 'direcao'
+      ? provas.filter((prova) => prova.status !== 'rascunho')
+      : provas;
+    return res.json({ provas: visiveis });
   } catch (err) {
     console.error('Erro ao listar provas:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });
 
-// Não existe rota para o professor alterar o status da prova: a geração
-// já manda ela "Em análise" automaticamente (ver registrarProva), e só a
-// Direção pode mudar isso a partir daí — pela rota de revisão abaixo.
+// O professor não pode mudar o status por conta própria a partir daqui:
+// ele só dispara "Enviar para o coordenador" (acima); a partir daí, só a
+// Direção pode mover a prova adiante — pela rota de revisão abaixo.
 
 // A Direção aprova, reprova ou deixa a prova em análise — com um
 // comentário geral e, se reprovar, quais questões específicas pesaram na

@@ -20,9 +20,12 @@
   const listaRevisaoEl = document.getElementById('listaRevisao');
   const contadorRevisaoEl = document.getElementById('contadorRevisao');
   const statusPdfEl = document.getElementById('statusPdf');
+  const statusEnvioEl = document.getElementById('statusEnvio');
   const linkPdfEl = document.getElementById('linkPdf');
   const previaPdfEl = document.getElementById('previaPdf');
   const painelPreviaPdfEl = document.getElementById('painelPreviaPdf');
+  const btnSalvarRascunhoEl = document.getElementById('btnSalvarRascunho');
+  const btnEnviarCoordenadorEl = document.getElementById('btnEnviarCoordenador');
 
   let urlArquivoAtual = null;
 
@@ -179,11 +182,15 @@
       listaRevisaoEl.innerHTML = '<div class="lista-vazia">Nenhuma questão selecionada. Volte para o passo 2.</div>';
       document.getElementById('btnGerarPdf').disabled = true;
       document.getElementById('btnGerarDocx').disabled = true;
+      btnSalvarRascunhoEl.disabled = true;
+      btnEnviarCoordenadorEl.disabled = true;
       return;
     }
 
     document.getElementById('btnGerarPdf').disabled = false;
     document.getElementById('btnGerarDocx').disabled = false;
+    btnSalvarRascunhoEl.disabled = false;
+    btnEnviarCoordenadorEl.disabled = false;
     listaRevisaoEl.innerHTML = selecionadas.map((questao, indice) => `
       <article class="item-revisao ${flags.has(questao.id) ? 'reprovada-pela-direcao' : ''}" data-id="${escapeHtml(questao.id)}">
         <div class="ordem">${indice + 1}</div>
@@ -263,7 +270,7 @@
       const resposta = await fetch(`${API_BASE}/api/provas/gerar-${formato}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...dados, questaoIds: ids }),
+        body: JSON.stringify({ ...dados, questaoIds: ids, id: Estado.provaAtualId || undefined }),
       });
 
       // Em caso de erro o servidor responde JSON, não o arquivo.
@@ -271,6 +278,12 @@
         const erro = await resposta.json().catch(() => ({}));
         throw new Error(erro.erro || `Falha ao gerar o ${formato.toUpperCase()} (HTTP ${resposta.status}).`);
       }
+
+      // O servidor devolve o ID da prova registrada num cabeçalho (a
+      // resposta em si é o arquivo binário) — próximas ações (salvar,
+      // enviar, gerar o outro formato) atualizam o mesmo registro.
+      const idRegistrado = resposta.headers.get('X-Prova-Id');
+      if (idRegistrado) Estado.provaAtualId = idRegistrado;
 
       const blob = await resposta.blob();
       if (urlArquivoAtual) URL.revokeObjectURL(urlArquivoAtual);
@@ -318,6 +331,68 @@
     }
   }
 
+  /* ------------------------------- salvar rascunho / enviar ao coordenador */
+
+  // Fica true assim que a prova é enviada com sucesso nesta sessão: a
+  // partir daí ela não é mais um rascunho, então "Salvar rascunho" e
+  // "Enviar" ficam desativados (gerar o arquivo continua liberado).
+  let provaTravada = false;
+
+  // Usada tanto por "Salvar rascunho" quanto por "Enviar para o
+  // coordenador" — a única diferença entre as duas ações é o endpoint.
+  async function enviarAcaoProva(endpoint, { rotuloCarregando, aoConcluir }) {
+    const ids = Estado.selecionadas.slice();
+    if (!ids.length || provaTravada) return;
+
+    const botoes = [btnSalvarRascunhoEl, btnEnviarCoordenadorEl];
+    botoes.forEach((botao) => { botao.disabled = true; });
+    statusEnvioEl.textContent = rotuloCarregando;
+    statusEnvioEl.className = 'status';
+
+    try {
+      const dados = dadosDoCabecalho();
+      const prova = await window.App.pedirJson(`/api/provas/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...dados, questaoIds: ids, id: Estado.provaAtualId || undefined }),
+      });
+
+      Estado.provaAtualId = prova.id;
+      aoConcluir(prova);
+
+      window.App.carregarQuestoes();
+      window.Painel?.renderizar();
+    } catch (err) {
+      statusEnvioEl.textContent = err.message;
+      statusEnvioEl.className = 'status erro';
+    } finally {
+      if (!provaTravada) botoes.forEach((botao) => { botao.disabled = false; });
+    }
+  }
+
+  function salvarRascunho() {
+    enviarAcaoProva('rascunho', {
+      rotuloCarregando: 'Salvando rascunho...',
+      aoConcluir: () => {
+        statusEnvioEl.textContent = 'Rascunho salvo. Só você vê essa prova até enviá-la para o coordenador.';
+        statusEnvioEl.className = 'status ok';
+      },
+    });
+  }
+
+  function enviarParaCoordenador() {
+    enviarAcaoProva('enviar', {
+      rotuloCarregando: 'Enviando para o coordenador...',
+      aoConcluir: () => {
+        provaTravada = true;
+        btnSalvarRascunhoEl.disabled = true;
+        btnEnviarCoordenadorEl.disabled = true;
+        statusEnvioEl.textContent = 'Prova enviada para o coordenador. Ela virou só leitura por aqui — acompanhe a revisão pelo Painel.';
+        statusEnvioEl.className = 'status ok';
+      },
+    });
+  }
+
   /* --------------------------------------------- ligações de tela */
 
   document.getElementById('btnContinuarRevisao').addEventListener('click', () => mostrarView('revisao'));
@@ -325,11 +400,22 @@
   document.getElementById('btnVoltarMontagem').addEventListener('click', () => mostrarView('montar'));
   document.getElementById('btnGerarPdf').addEventListener('click', () => gerarProva('pdf'));
   document.getElementById('btnGerarDocx').addEventListener('click', () => gerarProva('docx'));
+  btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
+  btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
 
   // Data de hoje já preenchida no cabeçalho da prova.
   const campoData = document.getElementById('campoData');
   if (!campoData.value) campoData.value = new Date().toISOString().slice(0, 10);
 
-  window.MontagemProva = { renderizarMontagem, renderizarRevisao };
+  // Chamado pelo Painel ao começar uma prova nova ou reabrir uma
+  // existente, para que o estado de "já enviada" da prova anterior não
+  // vaze para a próxima.
+  function resetarEnvio() {
+    provaTravada = false;
+    statusEnvioEl.textContent = '';
+    statusEnvioEl.className = 'status';
+  }
+
+  window.MontagemProva = { renderizarMontagem, renderizarRevisao, resetarEnvio };
   renderizarMontagem();
 })();

@@ -262,77 +262,140 @@ async function registrarUsoQuestoes(ids) {
 
 /* ------------------------------------------------------------ provas */
 
-// Cada prova gerada (PDF ou DOCX) vira um documento em "provas". É o que
-// alimenta o Painel do professor: provas do semestre, quantas já foram
-// aprovadas pela direção e a lista das mais recentes.
+// Cada prova vira um documento em "provas". É o que alimenta o Painel do
+// professor: provas do semestre, quantas já foram aprovadas pela direção
+// e a lista das mais recentes.
 const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada', 'reprovada'];
 
-// O professor não controla o status — ele nasce "em análise" assim que a
-// prova é gerada (ver registrarProva) e só a Direção pode movê-lo daí em
-// diante, via revisarProva.
+// Só a Direção pode mover uma prova daí em diante, via revisarProva.
 const STATUS_REVISAO_COORDENADOR = ['aprovada', 'reprovada', 'em_revisao'];
 
-async function registrarProva(dados) {
-  const banco = exigirFirestore();
-  const agora = admin.firestore.FieldValue.serverTimestamp();
+// Campos do cabeçalho + questões que tanto "Salvar rascunho" quanto
+// "Enviar para o coordenador" gravam. Mantido à parte para os dois casos
+// (criar do zero e atualizar um rascunho existente) escreverem exatamente
+// os mesmos campos.
+function camposDaProva(dados) {
   const questaoIds = [...new Set(dados.questaoIds || [])];
-  const curso = validarCurso(dados.curso);
-
-  const prova = {
+  return {
     titulo: String(dados.titulo || 'Avaliação').slice(0, 160),
-    curso,
+    curso: validarCurso(dados.curso),
     periodo: String(dados.periodo || '').slice(0, 40),
     etapa: String(dados.etapa || '').slice(0, 20),
     data: String(dados.data || '').slice(0, 20),
     questaoIds,
     quantidadeQuestoes: questaoIds.length,
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
-    // Gerar o arquivo já é o "envio" para a Direção — não existe rascunho
-    // manual nem botão de submissão; o professor não altera isso depois.
-    status: 'em_revisao',
-    // Preenchidos só quando a Direção revisa (ver revisarProva).
+  };
+}
+
+// Busca o documento de uma prova e garante que ele ainda está em
+// "rascunho" — é o único estado em que o professor pode alterar o
+// conteúdo. Uma vez enviada para o coordenador (em análise, aprovada ou
+// reprovada), o registro fica só leitura por aqui.
+async function exigirRascunhoEditavel(banco, id) {
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+  if (documento.data().status !== 'rascunho') {
+    throw Object.assign(
+      new Error('Essa prova já foi enviada para o coordenador e não pode mais ser editada.'),
+      { statusCode: 403 },
+    );
+  }
+  return referencia;
+}
+
+// "Salvar rascunho": grava o cabeçalho + as questões escolhidas sem
+// enviar nada para a Direção. Sem dados.id cria uma prova nova (status
+// "rascunho"); com dados.id atualiza um rascunho já existente no lugar,
+// em vez de duplicar a linha no Painel.
+async function salvarRascunho(dados) {
+  const banco = exigirFirestore();
+  const agora = admin.firestore.FieldValue.serverTimestamp();
+  const campos = camposDaProva(dados);
+
+  if (dados.id) {
+    const referencia = await exigirRascunhoEditavel(banco, dados.id);
+    await referencia.update({ ...campos, atualizadoEm: agora });
+    return formatarProva(await referencia.get());
+  }
+
+  const referencia = await banco.collection('provas').add({
+    ...campos,
+    status: 'rascunho',
     comentarioCoordenador: '',
     questoesReprovadas: [],
     revisadoPorId: null,
     revisadoEm: null,
-    formatos: dados.formato ? [dados.formato] : [],
+    formatos: [],
     criadoPorId: dados.criadoPorId || null,
     criadoEm: agora,
     atualizadoEm: agora,
-  };
+  });
+  return formatarProva(await referencia.get());
+}
 
-  // Gerar de novo a mesma prova (ex.: PDF depois do DOCX) atualiza o
-  // registro em vez de duplicar a linha no painel.
-  const semelhante = await banco.collection('provas')
-    .where('titulo', '==', prova.titulo)
-    .orderBy('criadoEm', 'desc')
-    .limit(1)
-    .get()
-    .catch(() => null);
+// "Enviar para o coordenador": vira a ação explícita que o professor
+// dispara quando quer que a Direção revise a prova. Aceita tanto enviar
+// um rascunho que já existia (dados.id) quanto ir direto ao envio sem
+// nunca ter salvo rascunho — nesse segundo caso a prova nasce e já entra
+// em análise em uma única chamada.
+async function enviarParaCoordenador(dados) {
+  const banco = exigirFirestore();
+  const agora = admin.firestore.FieldValue.serverTimestamp();
 
-  const anterior = semelhante && !semelhante.empty ? semelhante.docs[0] : null;
-  const mesmasQuestoes = anterior
-    && JSON.stringify(anterior.data().questaoIds || []) === JSON.stringify(questaoIds);
+  const salva = await salvarRascunho(dados);
+  const referencia = banco.collection('provas').doc(salva.id);
+  await referencia.update({ status: 'em_revisao', atualizadoEm: agora });
+  return formatarProva(await referencia.get());
+}
 
-  if (mesmasQuestoes) {
-    const formatos = [...new Set([...(anterior.data().formatos || []), ...prova.formatos])];
-    await anterior.ref.update({
-      ...prova,
+// Registra que um arquivo (PDF/DOCX) foi gerado para a prova — chamado
+// depois que o arquivo já foi montado, para alimentar o Painel do
+// professor e o contador "usada em N provas" das questões. Gerar o
+// arquivo é só um download: não muda o status de quem já tem um rascunho
+// salvo, e uma prova inteiramente nova nasce em rascunho (dados.id
+// ausente) — o envio para o coordenador é sempre uma ação à parte.
+async function registrarProva(dados) {
+  const banco = exigirFirestore();
+  const agora = admin.firestore.FieldValue.serverTimestamp();
+  const campos = camposDaProva(dados);
+  const formato = dados.formato ? [dados.formato] : [];
+
+  if (dados.id) {
+    const referencia = banco.collection('provas').doc(dados.id);
+    const documento = await referencia.get();
+    if (!documento.exists) {
+      throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+    }
+    const formatos = [...new Set([...(documento.data().formatos || []), ...formato])];
+    // Só atualiza o conteúdo (questões/cabeçalho) se ainda for rascunho —
+    // uma prova já enviada mantém o que o coordenador revisou, e só
+    // registra que também foi baixada em outro formato.
+    const podeAtualizarConteudo = documento.data().status === 'rascunho';
+    await referencia.update({
+      ...(podeAtualizarConteudo ? campos : {}),
       formatos,
-      status: anterior.data().status || 'rascunho',
-      // Regerar o arquivo (ex.: PDF depois do DOCX) não apaga a revisão
-      // que a Direção já tiver feito nesta prova.
-      comentarioCoordenador: anterior.data().comentarioCoordenador || '',
-      questoesReprovadas: anterior.data().questoesReprovadas || [],
-      revisadoPorId: anterior.data().revisadoPorId || null,
-      revisadoEm: anterior.data().revisadoEm || null,
-      criadoEm: anterior.data().criadoEm,
+      atualizadoEm: agora,
     });
-    return { id: anterior.id };
+    return formatarProva(await referencia.get());
   }
 
-  const referencia = await banco.collection('provas').add(prova);
-  return { id: referencia.id };
+  const referencia = await banco.collection('provas').add({
+    ...campos,
+    status: 'rascunho',
+    comentarioCoordenador: '',
+    questoesReprovadas: [],
+    revisadoPorId: null,
+    revisadoEm: null,
+    formatos: formato,
+    criadoPorId: dados.criadoPorId || null,
+    criadoEm: agora,
+    atualizadoEm: agora,
+  });
+  return formatarProva(await referencia.get());
 }
 
 async function listarProvas(limite = 20, cursosFiltro = null) {
@@ -440,6 +503,8 @@ module.exports = {
   buscarQuestoesPorIds,
   registrarUsoQuestoes,
   registrarProva,
+  salvarRascunho,
+  enviarParaCoordenador,
   listarProvas,
   buscarProvaPorId,
   revisarProva,
