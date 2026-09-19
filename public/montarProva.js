@@ -10,7 +10,7 @@
     Estado, API_BASE, escapeHtml, formatarPontos, textoLimpo, resumir,
     rotuloPeriodo, estaSelecionada, alternarSelecao, salvarSelecao,
     questaoPorId, questoesSelecionadas, pontuacaoSelecionada, mostrarView,
-    EstadoUsuario, cursosDoUsuario, opcoesCurso, opcoesPeriodo,
+    EstadoUsuario, cursosDoUsuario, opcoesCurso, opcoesPeriodo, pedirJson,
   } = window.App;
 
   const PONTUACAO_ALVO = 10;
@@ -23,8 +23,31 @@
   const linkPdfEl = document.getElementById('linkPdf');
   const previaPdfEl = document.getElementById('previaPdf');
   const painelPreviaPdfEl = document.getElementById('painelPreviaPdf');
+  const btnEnviarCoordenadorEl = document.getElementById('btnEnviarCoordenador');
+  const statusEnviarEl = document.getElementById('statusEnviarCoordenador');
 
   let urlArquivoAtual = null;
+
+  // A prova que acabou de ser gerada (PDF e/ou DOCX) neste passo de
+  // revisão — é ela que o botão "Enviar para o coordenador" manda pra
+  // Direção. Some sempre que a seleção muda, porque aí o arquivo gerado
+  // não bate mais com o que está na tela; é preciso gerar de novo.
+  let provaAtualId = null;
+  let provaAtualStatus = null;
+
+  function atualizarBotaoEnviar() {
+    if (!btnEnviarCoordenadorEl) return;
+    const podeEnviar = provaAtualId && provaAtualStatus === 'rascunho';
+    btnEnviarCoordenadorEl.classList.toggle('oculto', !podeEnviar);
+    btnEnviarCoordenadorEl.disabled = false;
+  }
+
+  function esquecerProvaGerada() {
+    provaAtualId = null;
+    provaAtualStatus = null;
+    if (statusEnviarEl) { statusEnviarEl.textContent = ''; statusEnviarEl.className = 'status'; }
+    atualizarBotaoEnviar();
+  }
 
   /* --------------------------------------------- passo 2: seleção */
 
@@ -171,6 +194,22 @@
     prepararCabecalhoProva();
     renderizarAvisoFeedback();
 
+    // Reabrindo uma prova existente (Painel → "Ver"): o Painel já deixou
+    // o id/status dela em Estado.provaAtual, então o botão "Enviar"
+    // aparece sem precisar gerar o arquivo de novo. Só vale pra este
+    // primeiro render — qualquer edição depois (mover, tirar questão,
+    // voltar e entrar de novo) esquece isso, porque aí não dá mais pra
+    // garantir que bate com o que está na tela.
+    if (Estado.provaAtual) {
+      provaAtualId = Estado.provaAtual.id;
+      provaAtualStatus = Estado.provaAtual.status;
+      Estado.provaAtual = null;
+      if (statusEnviarEl) { statusEnviarEl.textContent = ''; statusEnviarEl.className = 'status'; }
+      atualizarBotaoEnviar();
+    } else {
+      esquecerProvaGerada();
+    }
+
     const selecionadas = questoesSelecionadas();
     const flags = new Set(Estado.provaFeedback?.questoesReprovadas || []);
     contadorRevisaoEl.textContent = `(${selecionadas.length} · ${formatarPontos(pontuacaoSelecionada())} pts)`;
@@ -306,6 +345,13 @@
         : `DOCX gerado com ${ids.length} ${plural}. Abra no Word para editar antes de imprimir.`;
       statusPdfEl.className = 'status ok';
 
+      // O servidor manda o id e o status da prova registrada nos
+      // cabeçalhos da resposta — é o que decide se o botão "Enviar para
+      // o coordenador" aparece (só faz sentido enquanto ela é rascunho).
+      provaAtualId = resposta.headers.get('X-Prova-Id') || null;
+      provaAtualStatus = resposta.headers.get('X-Prova-Status') || null;
+      atualizarBotaoEnviar();
+
       // O contador "usada em N provas" e a lista do painel mudaram no
       // servidor (a prova gerada fica registrada em /api/provas).
       window.App.carregarQuestoes();
@@ -318,6 +364,28 @@
     }
   }
 
+  // Chamado pelo botão "Enviar para o coordenador": só existe depois de
+  // gerar o PDF/DOCX e enquanto a prova ainda é um rascunho.
+  async function enviarParaCoordenador() {
+    if (!provaAtualId) return;
+    btnEnviarCoordenadorEl.disabled = true;
+    statusEnviarEl.textContent = 'Enviando...';
+    statusEnviarEl.className = 'status';
+
+    try {
+      await pedirJson(`/api/provas/${encodeURIComponent(provaAtualId)}/enviar`, { method: 'POST' });
+      provaAtualStatus = 'em_revisao';
+      statusEnviarEl.textContent = 'Prova enviada para o coordenador.';
+      statusEnviarEl.className = 'status ok';
+      atualizarBotaoEnviar();
+      window.Painel?.renderizar();
+    } catch (err) {
+      statusEnviarEl.textContent = err.message;
+      statusEnviarEl.className = 'status erro';
+      btnEnviarCoordenadorEl.disabled = false;
+    }
+  }
+
   /* --------------------------------------------- ligações de tela */
 
   document.getElementById('btnContinuarRevisao').addEventListener('click', () => mostrarView('revisao'));
@@ -325,6 +393,7 @@
   document.getElementById('btnVoltarMontagem').addEventListener('click', () => mostrarView('montar'));
   document.getElementById('btnGerarPdf').addEventListener('click', () => gerarProva('pdf'));
   document.getElementById('btnGerarDocx').addEventListener('click', () => gerarProva('docx'));
+  btnEnviarCoordenadorEl?.addEventListener('click', enviarParaCoordenador);
 
   // Data de hoje já preenchida no cabeçalho da prova.
   const campoData = document.getElementById('campoData');

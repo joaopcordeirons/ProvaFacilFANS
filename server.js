@@ -27,6 +27,7 @@ const {
   buscarProvaPorId,
   revisarProva,
   excluirProva,
+  enviarProvaParaCoordenador,
 } = require('./firebase');
 const {
   criarUsuario,
@@ -550,9 +551,12 @@ async function gerarProva(req, res, formato) {
     await registrarUsoQuestoes(questoes.map((questao) => questao.id));
 
     // O registro alimenta o Painel do professor. Falhar aqui não invalida
-    // um arquivo que já foi gerado — o download continua.
+    // um arquivo que já foi gerado — o download continua. O id e o status
+    // voltam em cabeçalhos pro front saber se pode oferecer o botão
+    // "Enviar para o coordenador" (só faz sentido pra prova em rascunho).
+    let provaRegistrada = null;
     try {
-      await registrarProva({
+      provaRegistrada = await registrarProva({
         titulo: dados.titulo,
         curso: dados.curso,
         periodo: dados.periodo,
@@ -570,6 +574,11 @@ async function gerarProva(req, res, formato) {
     res.setHeader('Content-Type', MIME_SAIDA[formato]);
     res.setHeader('Content-Disposition', `attachment; filename="${nomeArquivo(corpo.titulo, formato)}"`);
     res.setHeader('Content-Length', arquivo.length);
+    if (provaRegistrada?.id) {
+      res.setHeader('X-Prova-Id', provaRegistrada.id);
+      res.setHeader('X-Prova-Status', provaRegistrada.status || 'rascunho');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Prova-Id, X-Prova-Status');
+    }
     return res.end(arquivo);
   } catch (err) {
     console.error(`Erro ao gerar a prova em ${formato.toUpperCase()}:`, err.message);
@@ -596,9 +605,9 @@ app.get('/api/provas', async (req, res) => {
   }
 });
 
-// Não existe rota para o professor alterar o status da prova: a geração
-// já manda ela "Em análise" automaticamente (ver registrarProva), e só a
-// Direção pode mudar isso a partir daí — pela rota de revisão abaixo.
+// A única mudança de status que o professor pode fazer é a de cima
+// (enviar o rascunho pra Direção). Daqui pra frente é só leitura pra
+// ele — quem decide aprovar/reprovar é a Direção, na rota abaixo.
 
 // A Direção aprova, reprova ou deixa a prova em análise — com um
 // comentário geral e, se reprovar, quais questões específicas pesaram na
@@ -626,7 +635,28 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
   }
 });
 
-// O professor só pode excluir uma prova enquanto ela ainda não foi
+// O professor decide quando mandar a prova pra Direção: o botão "Enviar
+// para o coordenador" na tela de revisão chama esta rota, que só move
+// "rascunho" → "em análise". Daí em diante (aprovar/reprovar) é só a
+// Direção, pela rota de revisão abaixo.
+app.post('/api/provas/:id/enviar', async (req, res) => {
+  try {
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+    }
+    if (existente.status !== 'rascunho') {
+      return res.status(403).json({ erro: 'Essa prova já foi enviada para o coordenador.' });
+    }
+    return res.json(await enviarProvaParaCoordenador(req.params.id));
+  } catch (err) {
+    console.error('Erro ao enviar a prova para o coordenador:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Só o professor pode excluir, e só enquanto a prova ainda não foi
 // enviada para a Direção (status "rascunho"). Uma vez em análise,
 // aprovada ou reprovada, ela já está com o coordenador e fica só
 // leitura — não importa qual desses três status ela tenha.

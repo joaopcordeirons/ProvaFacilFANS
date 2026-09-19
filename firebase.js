@@ -267,9 +267,10 @@ async function registrarUsoQuestoes(ids) {
 // aprovadas pela direção e a lista das mais recentes.
 const STATUS_PROVA = ['rascunho', 'em_revisao', 'aprovada', 'reprovada'];
 
-// O professor não controla o status — ele nasce "em análise" assim que a
-// prova é gerada (ver registrarProva) e só a Direção pode movê-lo daí em
-// diante, via revisarProva.
+// O professor decide quando enviar a prova para a Direção (botão "Enviar
+// para o coordenador" depois de gerar o PDF/DOCX — ver enviarProvaParaCoordenador
+// abaixo). Antes disso ela fica "rascunho": só leitura pra Direção, mas o
+// professor ainda pode regerar o arquivo ou excluí-la.
 const STATUS_REVISAO_COORDENADOR = ['aprovada', 'reprovada', 'em_revisao'];
 
 async function registrarProva(dados) {
@@ -287,9 +288,10 @@ async function registrarProva(dados) {
     questaoIds,
     quantidadeQuestoes: questaoIds.length,
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
-    // Gerar o arquivo já é o "envio" para a Direção — não existe rascunho
-    // manual nem botão de submissão; o professor não altera isso depois.
-    status: 'em_revisao',
+    // Gerar o arquivo só cria/atualiza o rascunho — o envio de verdade
+    // para a Direção é uma ação separada do professor (ver
+    // enviarProvaParaCoordenador), disparada pelo botão na tela de revisão.
+    status: 'rascunho',
     // Preenchidos só quando a Direção revisa (ver revisarProva).
     comentarioCoordenador: '',
     questoesReprovadas: [],
@@ -316,10 +318,11 @@ async function registrarProva(dados) {
 
   if (mesmasQuestoes) {
     const formatos = [...new Set([...(anterior.data().formatos || []), ...prova.formatos])];
+    const statusMantido = anterior.data().status || 'rascunho';
     await anterior.ref.update({
       ...prova,
       formatos,
-      status: anterior.data().status || 'rascunho',
+      status: statusMantido,
       // Regerar o arquivo (ex.: PDF depois do DOCX) não apaga a revisão
       // que a Direção já tiver feito nesta prova.
       comentarioCoordenador: anterior.data().comentarioCoordenador || '',
@@ -328,11 +331,11 @@ async function registrarProva(dados) {
       revisadoEm: anterior.data().revisadoEm || null,
       criadoEm: anterior.data().criadoEm,
     });
-    return { id: anterior.id };
+    return { id: anterior.id, status: statusMantido };
   }
 
   const referencia = await banco.collection('provas').add(prova);
-  return { id: referencia.id };
+  return { id: referencia.id, status: prova.status };
 }
 
 async function listarProvas(limite = 20, cursosFiltro = null) {
@@ -413,6 +416,28 @@ async function revisarProva(id, { status, comentario, questoesReprovadas, reviso
   return formatarProva(await referencia.get());
 }
 
+// O professor clica em "Enviar para o coordenador" na tela de revisão
+// depois de gerar o PDF/DOCX. Só sai do rascunho — a partir daqui quem
+// decide o resto (aprovar/reprovar) é a Direção, via revisarProva.
+async function enviarProvaParaCoordenador(id) {
+  validarId(id);
+  const banco = exigirFirestore();
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+  if ((documento.data().status || 'rascunho') !== 'rascunho') {
+    throw Object.assign(new Error('Essa prova já foi enviada para o coordenador.'), { statusCode: 403 });
+  }
+
+  await referencia.update({
+    status: 'em_revisao',
+    atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return formatarProva(await referencia.get());
+}
+
 async function excluirQuestao(id) {
   validarId(id);
   const banco = exigirFirestore();
@@ -444,5 +469,6 @@ module.exports = {
   buscarProvaPorId,
   revisarProva,
   excluirProva,
+  enviarProvaParaCoordenador,
   sanitizarHtml,
 };
