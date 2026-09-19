@@ -371,7 +371,7 @@
   .editor:empty::before { content: attr(data-placeholder); color: var(--ink-faint); }
   .status-inline { margin-top: 0.55rem; font-size: 0.8rem; color: var(--ink-muted); }
   .status-inline.erro { color: var(--claret); }
-  .oculto { display: none; }
+  .oculto { display: none !important; }
 
   .email-item {
     border: 1px solid var(--rule);
@@ -541,8 +541,9 @@
   /* ---------- Painel do meio: lista de questões ---------- */
   .painel-lista { padding: 1.15rem 1rem; display: flex; flex-direction: column; min-width: 0; }
   .busca-lista { width: 100%; margin-bottom: 0.8rem; min-width: 0; }
-  .lista-resumo { font-size: 0.8rem; color: var(--ink-muted); margin-bottom: 0.8rem; }
+  .lista-resumo { font-size: 0.8rem; color: var(--ink-muted); }
   .lista-resumo .erro { color: var(--claret); }
+  .lista-resumo-linha { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-bottom: 0.8rem; }
   .lista-questoes, .lista-montagem, .lista-revisao { display: flex; flex-direction: column; gap: 0.5rem; }
   .lista-vazia { font-size: 0.85rem; color: var(--ink-faint); padding: 1.5rem 0; text-align: center; }
 
@@ -572,11 +573,8 @@
   .caixa-selecao.marcada { background: var(--ink); border-color: var(--ink); }
   .caixa-selecao:hover { border-color: var(--ink-muted); }
 
-  .item-excluir-check {
-    flex-shrink: 0; margin-top: 0.15rem; margin-left: auto; padding-left: 0.5rem;
-    display: flex; align-items: center; cursor: pointer;
-  }
-  .item-excluir-check input { margin: 0; width: 15px; height: 15px; cursor: pointer; accent-color: var(--claret); }
+  .caixa-selecao.modo-exclusao { border-color: var(--claret); accent-color: var(--claret); }
+  .caixa-selecao.modo-exclusao.marcada { background: var(--claret); border-color: var(--claret); }
 
   /* ---------- Painel da direita: detalhe da questão ---------- */
   .painel-detalhe { padding: 1.15rem 1.3rem; min-width: 0; }

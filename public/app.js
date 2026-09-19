@@ -200,6 +200,12 @@ const painelDetalheEl = document.getElementById('painelDetalhe');
 const buscaPalavraChaveEl = document.getElementById('buscaPalavraChave');
 const buscaAssuntoEl = document.getElementById('buscaAssunto');
 const acoesExclusaoBancoEl = document.getElementById('acoesExclusaoBanco');
+const btnModoExclusaoBancoEl = document.getElementById('btnModoExclusaoBanco');
+
+// Enquanto ativo, a caixinha de cada questão (a mesma que normalmente
+// marca "p/ prova") passa a marcar "excluir do banco" — em vez de dois
+// checkboxes lado a lado, um só muda de função, pra não confundir.
+let modoExclusaoBanco = false;
 
 // IDs marcados para excluir do banco em lote — separado da seleção "p/
 // prova" (que usa .caixa-selecao); marcar uma questão pra excluir não
@@ -314,7 +320,10 @@ function renderizarLista() {
   idsParaExcluirDoBanco.forEach((id) => { if (!idsNoBanco.has(id)) idsParaExcluirDoBanco.delete(id); });
 
   const plural = (quantidade, singular, plural_) => `${quantidade} ${quantidade === 1 ? singular : plural_}`;
-  resumoListaEl.textContent = `${plural(questoes.length, 'questão', 'questões')} · ${plural(Estado.selecionadas.length, 'selecionada', 'selecionadas')} p/ prova`;
+  resumoListaEl.textContent = modoExclusaoBanco
+    ? plural(questoes.length, 'questão', 'questões')
+    : `${plural(questoes.length, 'questão', 'questões')} · ${plural(Estado.selecionadas.length, 'selecionada', 'selecionadas')} p/ prova`;
+  btnModoExclusaoBancoEl.textContent = modoExclusaoBanco ? 'Cancelar seleção' : 'Selecionar para excluir';
 
   if (!questoes.length) {
     listaQuestoesEl.innerHTML = '<div class="lista-vazia">Nenhuma questão encontrada com esses filtros.</div>';
@@ -330,9 +339,12 @@ function renderizarLista() {
 
   listaQuestoesEl.innerHTML = questoes.map((questao) => `
     <article class="item-questao ${questao.id === Estado.detalheId ? 'aberta' : ''}" data-id="${escapeHtml(questao.id)}">
-      <button type="button" class="caixa-selecao ${estaSelecionada(questao.id) ? 'marcada' : ''}"
-        data-selecionar="${escapeHtml(questao.id)}"
-        aria-label="${estaSelecionada(questao.id) ? 'Remover da prova' : 'Adicionar à prova'}"></button>
+      <button type="button"
+        class="caixa-selecao ${modoExclusaoBanco ? 'modo-exclusao' : ''} ${(modoExclusaoBanco ? idsParaExcluirDoBanco.has(questao.id) : estaSelecionada(questao.id)) ? 'marcada' : ''}"
+        data-marcar="${escapeHtml(questao.id)}"
+        aria-label="${modoExclusaoBanco
+          ? (idsParaExcluirDoBanco.has(questao.id) ? 'Desmarcar exclusão' : 'Marcar para excluir')
+          : (estaSelecionada(questao.id) ? 'Remover da prova' : 'Adicionar à prova')}"></button>
       <div class="item-corpo">
         <div class="item-cabecalho">
           <span class="codigo">${escapeHtml(questao.codigo)}</span>
@@ -341,9 +353,6 @@ function renderizarLista() {
         <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 110) || '(vazio)')}</p>
         <div class="item-meta">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}${cursosDoUsuario().length > 1 ? ` · ${escapeHtml(questao.curso || '—')}` : ''}</div>
       </div>
-      <label class="item-excluir-check" title="Marcar para excluir do banco">
-        <input type="checkbox" data-marcar-excluir="${escapeHtml(questao.id)}" ${idsParaExcluirDoBanco.has(questao.id) ? 'checked' : ''}>
-      </label>
     </article>
   `).join('');
 
@@ -354,30 +363,37 @@ function renderizarLista() {
       renderizarBanco();
     });
   });
-  listaQuestoesEl.querySelectorAll('[data-selecionar]').forEach((botao) => {
+  listaQuestoesEl.querySelectorAll('[data-marcar]').forEach((botao) => {
     botao.addEventListener('click', (evento) => {
       evento.stopPropagation(); // marcar não deve trocar o detalhe aberto
-      alternarSelecao(botao.dataset.selecionar);
-      renderizarBanco();
-    });
-  });
-  listaQuestoesEl.querySelectorAll('[data-marcar-excluir]').forEach((caixa) => {
-    caixa.addEventListener('click', (evento) => evento.stopPropagation());
-    caixa.addEventListener('change', () => {
-      if (caixa.checked) idsParaExcluirDoBanco.add(caixa.dataset.marcarExcluir);
-      else idsParaExcluirDoBanco.delete(caixa.dataset.marcarExcluir);
-      atualizarBarraExclusaoBanco();
+      const id = botao.dataset.marcar;
+      if (modoExclusaoBanco) {
+        if (idsParaExcluirDoBanco.has(id)) idsParaExcluirDoBanco.delete(id);
+        else idsParaExcluirDoBanco.add(id);
+        renderizarLista();
+      } else {
+        alternarSelecao(id);
+        renderizarBanco();
+      }
     });
   });
 
   atualizarBarraExclusaoBanco();
 }
 
+// Botão "Selecionar para excluir" / "Cancelar seleção" no topo da lista.
+btnModoExclusaoBancoEl.addEventListener('click', () => {
+  modoExclusaoBanco = !modoExclusaoBanco;
+  if (!modoExclusaoBanco) idsParaExcluirDoBanco.clear();
+  renderizarLista();
+});
+
 // Barra que aparece acima da lista assim que pelo menos uma questão é
-// marcada para excluir — some sozinha quando o lote fica vazio.
+// marcada para excluir — some sozinha quando o lote fica vazio ou o modo
+// é cancelado.
 function atualizarBarraExclusaoBanco() {
   const quantidade = idsParaExcluirDoBanco.size;
-  if (!quantidade) {
+  if (!modoExclusaoBanco || !quantidade) {
     acoesExclusaoBancoEl.classList.add('oculto');
     acoesExclusaoBancoEl.innerHTML = '';
     return;
@@ -387,11 +403,11 @@ function atualizarBarraExclusaoBanco() {
   acoesExclusaoBancoEl.innerHTML = `
     <span>${quantidade} ${quantidade === 1 ? 'questão marcada' : 'questões marcadas'}</span>
     <div class="lista-acoes-massa-botoes">
-      <button type="button" class="btn-link" id="btnCancelarExclusaoBanco">Cancelar</button>
+      <button type="button" class="btn-link" id="btnLimparExclusaoBanco">Limpar marcação</button>
       <button type="button" class="btn-link-perigo" id="btnExcluirSelecionadasBanco">Excluir selecionadas</button>
     </div>
   `;
-  document.getElementById('btnCancelarExclusaoBanco').addEventListener('click', () => {
+  document.getElementById('btnLimparExclusaoBanco').addEventListener('click', () => {
     idsParaExcluirDoBanco.clear();
     renderizarLista();
   });
@@ -430,6 +446,7 @@ function confirmarExclusaoEmLote() {
     }
 
     idsParaExcluirDoBanco.clear();
+    modoExclusaoBanco = false;
     // Some da prova em montagem também, senão o PDF quebraria depois.
     const idsExcluidos = new Set(ids);
     Estado.selecionadas = Estado.selecionadas.filter((id) => !idsExcluidos.has(id));
