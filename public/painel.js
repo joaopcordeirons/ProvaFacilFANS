@@ -130,6 +130,12 @@
     // tela de Revisão — o professor não tem como alterá-lo por aqui.
     const statusHtml = `<span class="status-badge ${status.classe}">${escapeHtml(status.rotulo)}</span>`;
 
+    // Só dá pra excluir enquanto a prova ainda é um rascunho — depois de
+    // enviada para a Direção (em análise, aprovada ou reprovada), ela
+    // fica só leitura por aqui.
+    const podeExcluir = !direcao && prova.status === 'rascunho';
+    const botaoExcluir = podeExcluir ? '<button type="button" class="excluir" data-excluir>Excluir</button>' : '';
+
     return `
       <tr data-id="${escapeHtml(prova.id)}">
         <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}</td>
@@ -138,7 +144,9 @@
         <td class="numerica" data-th="Valor">${escapeHtml(valor)}</td>
         <td data-th="Status">${statusHtml}</td>
         <td class="discreta" data-th="Última atualização">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
-        <td class="acao" data-th=""><button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button></td>
+        <td class="acao" data-th="">
+          <button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button>${botaoExcluir}
+        </td>
       </tr>
     `;
   }
@@ -178,7 +186,30 @@
         if (ehDirecao()) window.RevisaoDirecao?.abrir(prova);
         else abrirProva(prova);
       });
+      const botaoExcluir = linha.querySelector('[data-excluir]');
+      if (botaoExcluir) {
+        botaoExcluir.addEventListener('click', (evento) => {
+          evento.stopPropagation();
+          excluirProva(prova, botaoExcluir);
+        });
+      }
     });
+  }
+
+  // Só chega aqui pra provas em rascunho (ver linhaProva) — mesmo assim
+  // o servidor confere o status de novo antes de apagar de verdade.
+  async function excluirProva(prova, botao) {
+    if (!prova || !window.confirm(`Excluir a prova "${prova.titulo}"? Essa ação não pode ser desfeita.`)) return;
+    botao.disabled = true;
+    try {
+      await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}`, { method: 'DELETE' });
+      provas = provas.filter((item) => item.id !== prova.id);
+      renderizarIndicadores();
+      renderizarTabela();
+    } catch (err) {
+      botao.disabled = false;
+      window.alert(err.message);
+    }
   }
 
   /* ------------------------------------------------------- ações */

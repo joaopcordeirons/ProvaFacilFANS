@@ -26,6 +26,7 @@ const {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  excluirProva,
 } = require('./firebase');
 const {
   criarUsuario,
@@ -621,6 +622,27 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
     return res.json(atualizada);
   } catch (err) {
     console.error('Erro ao revisar a prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// O professor só pode excluir uma prova enquanto ela ainda não foi
+// enviada para a Direção (status "rascunho"). Uma vez em análise,
+// aprovada ou reprovada, ela já está com o coordenador e fica só
+// leitura — não importa qual desses três status ela tenha.
+app.delete('/api/provas/:id', async (req, res) => {
+  try {
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, existente.curso)) {
+      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+    }
+    if (existente.status !== 'rascunho') {
+      return res.status(403).json({ erro: 'Essa prova já foi enviada para o coordenador e não pode mais ser excluída.' });
+    }
+    return res.json(await excluirProva(req.params.id));
+  } catch (err) {
+    console.error('Erro ao excluir a prova:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });

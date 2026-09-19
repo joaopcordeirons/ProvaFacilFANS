@@ -420,6 +420,16 @@ async function excluirQuestao(id) {
   return { id };
 }
 
+// Só apaga o registro em si — quem decide se isso é permitido (prova
+// ainda em rascunho, i.e. nunca enviada para a Direção) é o server.js,
+// checando o status antes de chamar esta função.
+async function excluirProva(id) {
+  validarId(id);
+  const banco = exigirFirestore();
+  await banco.collection('provas').doc(id).delete();
+  return { id };
+}
+
 module.exports = {
   obterFirestore,
   criarQuestao,
@@ -433,5 +443,6 @@ module.exports = {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  excluirProva,
   sanitizarHtml,
 };

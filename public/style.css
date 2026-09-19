@@ -704,6 +704,11 @@
     font-family: var(--sans); font-size: 0.85rem; padding: 0.2rem 0.3rem;
   }
   table.tabela-provas .acao button:hover { color: var(--accent); }
+  table.tabela-provas .acao .excluir {
+    border: 1px solid var(--claret); background: var(--claret-soft); color: var(--claret);
+    border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; margin-left: 0.5rem;
+  }
+  table.tabela-provas .acao .excluir:hover { color: var(--claret); border-color: var(--claret); opacity: 0.85; }
 
   /* Status como rótulo fixo — ninguém edita por aqui (nem professor, nem
      Direção); a decisão é sempre tomada na tela de Revisão. Feito pra
