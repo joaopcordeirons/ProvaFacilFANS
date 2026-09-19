@@ -709,6 +709,8 @@
     border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; margin-left: 0.5rem;
   }
   table.tabela-provas .acao .excluir:hover { color: var(--claret); border-color: var(--claret); opacity: 0.85; }
+  table.tabela-provas .acao .confirmacao-exclusao { margin-top: 0; white-space: normal; justify-content: flex-end; }
+  table.tabela-provas .acao .acao-erro { color: var(--claret); font-size: 0.78rem; }
 
   /* Status como rótulo fixo — ninguém edita por aqui (nem professor, nem
      Direção); a decisão é sempre tomada na tela de Revisão. Feito pra

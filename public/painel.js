@@ -145,7 +145,7 @@
         <td data-th="Status">${statusHtml}</td>
         <td class="discreta" data-th="Última atualização">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
         <td class="acao" data-th="">
-          <button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button>${botaoExcluir}
+          <span class="acao-padrao"><button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button>${botaoExcluir}</span>
         </td>
       </tr>
     `;
@@ -190,26 +190,42 @@
       if (botaoExcluir) {
         botaoExcluir.addEventListener('click', (evento) => {
           evento.stopPropagation();
-          excluirProva(prova, botaoExcluir);
+          pedirConfirmacaoExclusao(linha, prova);
         });
       }
     });
   }
 
-  // Só chega aqui pra provas em rascunho (ver linhaProva) — mesmo assim
-  // o servidor confere o status de novo antes de apagar de verdade.
-  async function excluirProva(prova, botao) {
-    if (!prova || !window.confirm(`Excluir a prova "${prova.titulo}"? Essa ação não pode ser desfeita.`)) return;
-    botao.disabled = true;
-    try {
-      await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}`, { method: 'DELETE' });
-      provas = provas.filter((item) => item.id !== prova.id);
-      renderizarIndicadores();
+  // Troca a célula de ações pela confirmação inline, sem popup do
+  // navegador — mesmo padrão do "Excluir" no Banco de Questões.
+  function pedirConfirmacaoExclusao(linha, prova) {
+    const celulaAcao = linha.querySelector('.acao');
+    celulaAcao.innerHTML = `
+      <span class="confirmacao-exclusao">
+        <span>Excluir esta prova?</span>
+        <button type="button" class="confirmar-exclusao">Confirmar</button>
+        <button type="button" class="cancelar-exclusao">Cancelar</button>
+      </span>
+    `;
+
+    celulaAcao.querySelector('.cancelar-exclusao').addEventListener('click', (evento) => {
+      evento.stopPropagation();
       renderizarTabela();
-    } catch (err) {
-      botao.disabled = false;
-      window.alert(err.message);
-    }
+    });
+
+    celulaAcao.querySelector('.confirmar-exclusao').addEventListener('click', async (evento) => {
+      evento.stopPropagation();
+      const botaoConfirmar = evento.currentTarget;
+      botaoConfirmar.disabled = true;
+      try {
+        await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}`, { method: 'DELETE' });
+        provas = provas.filter((item) => item.id !== prova.id);
+        renderizarIndicadores();
+        renderizarTabela();
+      } catch (err) {
+        celulaAcao.innerHTML = `<span class="acao-erro">${escapeHtml(err.message)}</span>`;
+      }
+    });
   }
 
   /* ------------------------------------------------------- ações */
