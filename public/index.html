@@ -127,6 +127,7 @@
             <input type="search" id="buscaPalavraChave" placeholder="Buscar por palavra-chave">
           </label>
           <div class="lista-resumo" id="resumoLista">Carregando…</div>
+          <div class="lista-acoes-massa oculto" id="acoesExclusaoBanco"></div>
           <div class="lista-questoes" id="listaQuestoes"></div>
         </section>
 
@@ -178,7 +179,10 @@
 
       <div class="duas-colunas">
         <section>
-          <div class="secao-titulo">Ordem das questões <span class="contador" id="contadorRevisao"></span></div>
+          <div class="secao-titulo">
+            Ordem das questões <span class="contador" id="contadorRevisao"></span>
+            <button type="button" class="btn-link-perigo oculto" id="btnRemoverSelecionadas">Remover selecionadas</button>
+          </div>
           <div class="lista-revisao" id="listaRevisao"></div>
         </section>
 

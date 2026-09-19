@@ -29,10 +29,15 @@
   const avisoProvaTravadaEl = document.getElementById('avisoProvaTravada');
   const btnDuplicarProvaEl = document.getElementById('btnDuplicarProva');
   const btnAdicionarMaisEl = document.getElementById('btnAdicionarMais');
+  const btnRemoverSelecionadasEl = document.getElementById('btnRemoverSelecionadas');
   const CAMPOS_CABECALHO_IDS = [
     'campoTitulo', 'campoCurso', 'campoPeriodo', 'campoEtapa', 'campoData',
     'campoValorProva', 'campoProfessor', 'campoInstrucoes', 'campoLinhas',
   ];
+
+  // IDs marcados na caixinha de cada questão para remover várias de uma
+  // vez em "Remover selecionadas", em vez de clicar no ✕ uma por uma.
+  const idsParaRemoverEmLote = new Set();
 
   let urlArquivoAtual = null;
 
@@ -209,12 +214,24 @@
     const flags = new Set(Estado.provaFeedback?.questoesReprovadas || []);
     contadorRevisaoEl.textContent = `(${selecionadas.length} · ${formatarPontos(pontuacaoSelecionada())} pts)`;
 
+    // Uma questão marcada que saiu da prova por outro caminho (ex.: o ✕
+    // de outra sessão) não deve continuar contando pro lote.
+    const idsAtuais = new Set(selecionadas.map((questao) => questao.id));
+    idsParaRemoverEmLote.forEach((id) => { if (!idsAtuais.has(id)) idsParaRemoverEmLote.delete(id); });
+
+    function atualizarBotaoRemoverLote() {
+      const quantidade = idsParaRemoverEmLote.size;
+      btnRemoverSelecionadasEl.textContent = `Remover selecionadas (${quantidade})`;
+      btnRemoverSelecionadasEl.classList.toggle('oculto', travada || quantidade === 0);
+    }
+
     if (!selecionadas.length) {
       listaRevisaoEl.innerHTML = '<div class="lista-vazia">Nenhuma questão selecionada. Volte para o passo 2.</div>';
       document.getElementById('btnGerarPdf').disabled = true;
       document.getElementById('btnGerarDocx').disabled = true;
       btnSalvarRascunhoEl.disabled = true;
       btnEnviarCoordenadorEl.disabled = true;
+      atualizarBotaoRemoverLote();
       return;
     }
 
@@ -235,6 +252,9 @@
           <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 180) || '(vazio)')}</p>
         </div>
         <div class="item-controles">
+          ${travada ? '' : `<label class="item-check-remocao" title="Marcar para remover em lote">
+            <input type="checkbox" data-check-remover ${idsParaRemoverEmLote.has(questao.id) ? 'checked' : ''}>
+          </label>`}
           <button type="button" data-mover="-1" aria-label="Subir" ${indice === 0 || travada ? 'disabled' : ''}>↑</button>
           <button type="button" data-mover="1" aria-label="Descer" ${indice === selecionadas.length - 1 || travada ? 'disabled' : ''}>↓</button>
           <button type="button" data-remover aria-label="Tirar da prova" ${travada ? 'disabled' : ''}>✕</button>
@@ -248,11 +268,19 @@
         botao.addEventListener('click', () => moverQuestao(id, Number(botao.dataset.mover)));
       });
       elemento.querySelector('[data-remover]').addEventListener('click', () => {
+        idsParaRemoverEmLote.delete(id);
         alternarSelecao(id);
         renderizarRevisao();
         window.App.renderizarBanco();
       });
+      elemento.querySelector('[data-check-remover]')?.addEventListener('change', (evento) => {
+        if (evento.target.checked) idsParaRemoverEmLote.add(id);
+        else idsParaRemoverEmLote.delete(id);
+        atualizarBotaoRemoverLote();
+      });
     });
+
+    atualizarBotaoRemoverLote();
   }
 
   /* ------------------------------------ geração do arquivo da prova */
@@ -450,6 +478,13 @@
   btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
   btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
   btnDuplicarProvaEl.addEventListener('click', duplicarProva);
+  btnRemoverSelecionadasEl.addEventListener('click', () => {
+    if (!idsParaRemoverEmLote.size) return;
+    idsParaRemoverEmLote.forEach((id) => alternarSelecao(id));
+    idsParaRemoverEmLote.clear();
+    renderizarRevisao();
+    window.App.renderizarBanco();
+  });
 
   // Data de hoje já preenchida no cabeçalho da prova.
   const campoData = document.getElementById('campoData');
@@ -460,6 +495,7 @@
   // próxima. O travamento em si (aviso, campos desabilitados) é decidido
   // dentro de renderizarRevisao, a partir de Estado.provaAtualStatus.
   function resetarEnvio() {
+    idsParaRemoverEmLote.clear();
     statusEnvioEl.textContent = '';
     statusEnvioEl.className = 'status';
   }

@@ -199,6 +199,12 @@ const resumoListaEl = document.getElementById('resumoLista');
 const painelDetalheEl = document.getElementById('painelDetalhe');
 const buscaPalavraChaveEl = document.getElementById('buscaPalavraChave');
 const buscaAssuntoEl = document.getElementById('buscaAssunto');
+const acoesExclusaoBancoEl = document.getElementById('acoesExclusaoBanco');
+
+// IDs marcados para excluir do banco em lote — separado da seleção "p/
+// prova" (que usa .caixa-selecao); marcar uma questão pra excluir não
+// deveria também tirar/pôr ela na prova em montagem.
+const idsParaExcluirDoBanco = new Set();
 
 // Filtro do painel da esquerda (curso/período/assunto) + as duas buscas do topo.
 function questoesFiltradas() {
@@ -302,11 +308,17 @@ function renderizarFiltros() {
 function renderizarLista() {
   const questoes = questoesFiltradas();
 
+  // Uma questão marcada que já saiu do banco por outro caminho não deve
+  // continuar contando pro lote.
+  const idsNoBanco = new Set(Estado.questoes.map((questao) => questao.id));
+  idsParaExcluirDoBanco.forEach((id) => { if (!idsNoBanco.has(id)) idsParaExcluirDoBanco.delete(id); });
+
   const plural = (quantidade, singular, plural_) => `${quantidade} ${quantidade === 1 ? singular : plural_}`;
   resumoListaEl.textContent = `${plural(questoes.length, 'questão', 'questões')} · ${plural(Estado.selecionadas.length, 'selecionada', 'selecionadas')} p/ prova`;
 
   if (!questoes.length) {
     listaQuestoesEl.innerHTML = '<div class="lista-vazia">Nenhuma questão encontrada com esses filtros.</div>';
+    atualizarBarraExclusaoBanco();
     return;
   }
 
@@ -329,6 +341,9 @@ function renderizarLista() {
         <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 110) || '(vazio)')}</p>
         <div class="item-meta">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}${cursosDoUsuario().length > 1 ? ` · ${escapeHtml(questao.curso || '—')}` : ''}</div>
       </div>
+      <label class="item-excluir-check" title="Marcar para excluir do banco">
+        <input type="checkbox" data-marcar-excluir="${escapeHtml(questao.id)}" ${idsParaExcluirDoBanco.has(questao.id) ? 'checked' : ''}>
+      </label>
     </article>
   `).join('');
 
@@ -345,6 +360,87 @@ function renderizarLista() {
       alternarSelecao(botao.dataset.selecionar);
       renderizarBanco();
     });
+  });
+  listaQuestoesEl.querySelectorAll('[data-marcar-excluir]').forEach((caixa) => {
+    caixa.addEventListener('click', (evento) => evento.stopPropagation());
+    caixa.addEventListener('change', () => {
+      if (caixa.checked) idsParaExcluirDoBanco.add(caixa.dataset.marcarExcluir);
+      else idsParaExcluirDoBanco.delete(caixa.dataset.marcarExcluir);
+      atualizarBarraExclusaoBanco();
+    });
+  });
+
+  atualizarBarraExclusaoBanco();
+}
+
+// Barra que aparece acima da lista assim que pelo menos uma questão é
+// marcada para excluir — some sozinha quando o lote fica vazio.
+function atualizarBarraExclusaoBanco() {
+  const quantidade = idsParaExcluirDoBanco.size;
+  if (!quantidade) {
+    acoesExclusaoBancoEl.classList.add('oculto');
+    acoesExclusaoBancoEl.innerHTML = '';
+    return;
+  }
+
+  acoesExclusaoBancoEl.classList.remove('oculto');
+  acoesExclusaoBancoEl.innerHTML = `
+    <span>${quantidade} ${quantidade === 1 ? 'questão marcada' : 'questões marcadas'}</span>
+    <div class="lista-acoes-massa-botoes">
+      <button type="button" class="btn-link" id="btnCancelarExclusaoBanco">Cancelar</button>
+      <button type="button" class="btn-link-perigo" id="btnExcluirSelecionadasBanco">Excluir selecionadas</button>
+    </div>
+  `;
+  document.getElementById('btnCancelarExclusaoBanco').addEventListener('click', () => {
+    idsParaExcluirDoBanco.clear();
+    renderizarLista();
+  });
+  document.getElementById('btnExcluirSelecionadasBanco').addEventListener('click', confirmarExclusaoEmLote);
+}
+
+// Troca a barra por uma confirmação inline — excluir do banco é
+// permanente, então merece uma segunda pergunta, igual à exclusão de uma
+// questão só (ver confirmarRemocao).
+function confirmarExclusaoEmLote() {
+  const quantidade = idsParaExcluirDoBanco.size;
+  if (!quantidade) return;
+
+  acoesExclusaoBancoEl.innerHTML = `
+    <span>Excluir ${quantidade} ${quantidade === 1 ? 'questão' : 'questões'} permanentemente?</span>
+    <div class="lista-acoes-massa-botoes">
+      <button type="button" class="btn-link" id="btnCancelarConfirmacaoLote">Cancelar</button>
+      <button type="button" class="btn-link-perigo" id="btnConfirmarExclusaoLote">Confirmar</button>
+    </div>
+  `;
+
+  document.getElementById('btnCancelarConfirmacaoLote').addEventListener('click', () => renderizarLista());
+
+  document.getElementById('btnConfirmarExclusaoLote').addEventListener('click', async (evento) => {
+    evento.target.disabled = true;
+    const ids = [...idsParaExcluirDoBanco];
+    const erros = [];
+    for (const id of ids) {
+      try {
+        // eslint-disable-next-line no-await-in-loop -- exclusões vão uma
+        // de cada vez para um erro isolado não derrubar as outras.
+        await pedirJson(`/api/questoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      } catch (err) {
+        erros.push(err.message);
+      }
+    }
+
+    idsParaExcluirDoBanco.clear();
+    // Some da prova em montagem também, senão o PDF quebraria depois.
+    const idsExcluidos = new Set(ids);
+    Estado.selecionadas = Estado.selecionadas.filter((id) => !idsExcluidos.has(id));
+    salvarSelecao();
+    Estado.detalheId = null;
+    await carregarQuestoes();
+
+    if (erros.length) {
+      acoesExclusaoBancoEl.classList.remove('oculto');
+      acoesExclusaoBancoEl.innerHTML = `<span class="erro">Algumas questões não puderam ser excluídas: ${escapeHtml(erros[0])}</span>`;
+    }
   });
 }
 

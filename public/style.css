@@ -572,6 +572,12 @@
   .caixa-selecao.marcada { background: var(--ink); border-color: var(--ink); }
   .caixa-selecao:hover { border-color: var(--ink-muted); }
 
+  .item-excluir-check {
+    flex-shrink: 0; margin-top: 0.15rem; margin-left: auto; padding-left: 0.5rem;
+    display: flex; align-items: center; cursor: pointer;
+  }
+  .item-excluir-check input { margin: 0; width: 15px; height: 15px; cursor: pointer; accent-color: var(--claret); }
+
   /* ---------- Painel da direita: detalhe da questão ---------- */
   .painel-detalhe { padding: 1.15rem 1.3rem; min-width: 0; }
   .detalhe-vazio { color: var(--ink-faint); font-size: 0.87rem; padding: 2rem 0; }
@@ -630,6 +636,25 @@
   }
   .secao-titulo .contador { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-faint); }
 
+  .btn-link, .btn-link-perigo {
+    border: none; background: none; padding: 0; cursor: pointer;
+    font-family: var(--sans); font-size: 0.78rem; text-decoration: underline;
+  }
+  .btn-link { color: var(--ink-muted); }
+  .btn-link:hover { color: var(--ink); }
+  .btn-link-perigo { color: var(--claret); font-weight: 600; }
+  .btn-link-perigo:hover { opacity: 0.75; }
+  .btn-link-perigo:disabled, .btn-link:disabled { opacity: 0.5; cursor: not-allowed; }
+  .secao-titulo .btn-link-perigo { margin-left: auto; }
+
+  .lista-acoes-massa {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.7rem;
+    padding: 0.55rem 0.75rem; margin: -0.2rem 0 0.8rem;
+    background: var(--claret-soft); border: 1px solid var(--claret); border-radius: 6px;
+    font-size: 0.8rem; color: var(--claret);
+  }
+  .lista-acoes-massa-botoes { display: flex; align-items: center; gap: 1rem; flex-shrink: 0; }
+
   .resumo-prova {
     background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
     padding: 1.15rem 1.2rem; position: sticky; top: 1.5rem;
@@ -663,7 +688,7 @@
     color: var(--paper); display: flex; align-items: center; justify-content: center;
     font-family: var(--mono); font-size: 0.75rem;
   }
-  .item-controles { display: flex; gap: 0.25rem; flex-shrink: 0; }
+  .item-controles { display: flex; gap: 0.25rem; flex-shrink: 0; align-items: center; }
   .item-controles button {
     width: 26px; height: 26px; border: 1px solid var(--rule); border-radius: 5px;
     background: var(--surface); cursor: pointer; color: var(--ink-muted);
@@ -671,6 +696,11 @@
   }
   .item-controles button:hover:not(:disabled) { border-color: var(--ink-muted); color: var(--ink); }
   .item-controles button:disabled { opacity: 0.35; cursor: not-allowed; }
+  .item-check-remocao {
+    width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .item-check-remocao input { margin: 0; width: 15px; height: 15px; cursor: pointer; }
 
   #previaPdf { width: 100%; height: 70vh; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
   .link-download { display: inline-block; margin-top: 0.6rem; font-size: 0.82rem; }
