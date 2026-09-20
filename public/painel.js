@@ -232,17 +232,12 @@
 
   // "Ver" recarrega a prova no fluxo de montagem: as questões dela viram
   // a seleção atual e o professor cai direto no passo de revisão, de onde
-  // pode gerar o PDF ou o DOCX de novo.
+  // pode gerar o PDF ou o DOCX de novo. Mesmo uma questão já excluída do
+  // banco continua aparecendo — vem do retrato salvo com a prova (ver
+  // arquivarQuestoesDeProva) — então não há popup de aviso aqui: a prova
+  // é mostrada inteira, sem interromper o fluxo.
   function abrirProva(prova) {
     if (!prova) return;
-    const existentes = (prova.questaoIds || []).filter((id) => window.App.questaoPorId(id));
-    if (!existentes.length) {
-      window.alert('As questões desta prova não estão mais no banco.');
-      return;
-    }
-    if (existentes.length < (prova.questaoIds || []).length) {
-      window.alert('Algumas questões desta prova foram excluídas do banco e ficaram de fora.');
-    }
 
     // A Direção pode ter reprovado (ou só deixado um comentário) — isso
     // vira um aviso fixo no passo de revisão, não um popup que some.
@@ -257,7 +252,8 @@
 
     Estado.provaAtualId = prova.id;
     Estado.provaAtualStatus = prova.status;
-    Estado.selecionadas = existentes;
+    Estado.provaOrigemId = null;
+    Estado.selecionadas = [...(prova.questaoIds || [])];
     window.App.salvarSelecao();
     window.MontagemProva?.resetarEnvio();
     renderizarBanco();
@@ -268,6 +264,7 @@
     try {
       const dados = await pedirJson('/api/provas?limite=20');
       provas = dados.provas || [];
+      window.App.arquivarQuestoesDeProva(provas);
       erroCarregamento = null;
     } catch (err) {
       provas = [];
@@ -297,6 +294,7 @@
     Estado.provaFeedback = null;
     Estado.provaAtualId = null;
     Estado.provaAtualStatus = null;
+    Estado.provaOrigemId = null;
     window.MontagemProva?.resetarEnvio();
     mostrarView('montar');
   });

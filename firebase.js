@@ -283,6 +283,12 @@ function camposDaProva(dados) {
     etapa: String(dados.etapa || '').slice(0, 20),
     data: String(dados.data || '').slice(0, 20),
     questaoIds,
+    // Um retrato do conteúdo de cada questão no momento em que a prova
+    // foi salva — não só o ID. É o que garante que a prova continue
+    // completa (pra reabrir ou reimprimir) mesmo que uma dessas questões
+    // seja excluída do banco depois; sem isso, a prova ficaria "quebrada"
+    // pra sempre, independente do status.
+    questoesSnapshot: Array.isArray(dados.questoesSnapshot) ? dados.questoesSnapshot.slice(0, 60) : [],
     quantidadeQuestoes: questaoIds.length,
     pontuacaoTotal: Number.isFinite(Number(dados.pontuacaoTotal)) ? Number(dados.pontuacaoTotal) : 0,
   };
@@ -375,8 +381,19 @@ async function registrarProva(dados) {
     // uma prova já enviada mantém o que o coordenador revisou, e só
     // registra que também foi baixada em outro formato.
     const podeAtualizarConteudo = documento.data().status === 'rascunho';
+
+    // O retrato (questoesSnapshot) é só uma cópia de segurança, nunca
+    // conteúdo que pesa na revisão da Direção — então pode ser completado
+    // mesmo numa prova que não é mais rascunho. Isso deixa uma prova
+    // salva antes desse recurso existir ganhar o retrato que faltava na
+    // primeira vez que for reimpressa, sem precisar reabrir edição.
+    const snapshotPorId = new Map((documento.data().questoesSnapshot || []).map((q) => [q.id, q]));
+    campos.questoesSnapshot.forEach((questao) => {
+      if (!snapshotPorId.has(questao.id)) snapshotPorId.set(questao.id, questao);
+    });
+
     await referencia.update({
-      ...(podeAtualizarConteudo ? campos : {}),
+      ...(podeAtualizarConteudo ? campos : { questoesSnapshot: [...snapshotPorId.values()] }),
       formatos,
       atualizadoEm: agora,
     });

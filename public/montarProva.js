@@ -247,6 +247,7 @@
             <span class="codigo">${escapeHtml(questao.codigo)}</span>
             <span class="pontos">${formatarPontos(questao.valor)} pts</span>
             <span class="item-origem">${escapeHtml(questao.assunto)} · ${escapeHtml(rotuloPeriodo(questao))}</span>
+            ${questao.arquivada ? '<span class="tag-arquivada" title="Foi excluída do banco depois desta prova ter sido montada">Excluída do banco</span>' : ''}
             ${flags.has(questao.id) ? '<span class="tag-reprovada">Reprovada pela Direção</span>' : ''}
           </div>
           <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 180) || '(vazio)')}</p>
@@ -301,6 +302,10 @@
       data: dataEscolhida ? dataEscolhida.split('-').reverse().join('/') : '',
       instrucoes: document.getElementById('campoInstrucoes').value.trim(),
       linhasResposta: Number(document.getElementById('campoLinhas').value),
+      // Dica pro servidor recuperar o retrato de uma questão já excluída
+      // do banco quando esta prova ainda não tem registro próprio (ver
+      // duplicarProva) — só é usada como fallback, nunca como conteúdo.
+      origemId: Estado.provaOrigemId || undefined,
     };
   }
 
@@ -346,6 +351,7 @@
       if (idRegistrado) {
         if (!Estado.provaAtualId) Estado.provaAtualStatus = 'rascunho';
         Estado.provaAtualId = idRegistrado;
+        Estado.provaOrigemId = null; // a prova já tem retrato próprio agora
       }
 
       const blob = await resposta.blob();
@@ -422,6 +428,8 @@
 
       Estado.provaAtualId = prova.id;
       Estado.provaAtualStatus = prova.status;
+      Estado.provaOrigemId = null; // a prova já tem retrato próprio agora
+      window.App.arquivarQuestoesDeProva(prova);
       aoConcluir(prova, Boolean(idEditavel));
 
       window.App.carregarQuestoes();
@@ -459,8 +467,11 @@
   // "Duplicar como nova prova": única saída da tela travada. Esquece o
   // vínculo com a prova enviada — o que já estiver no formulário (mesmas
   // questões, mesmo cabeçalho) vira o ponto de partida de uma prova nova,
-  // sem tocar na que o coordenador já revisou.
+  // sem tocar na que o coordenador já revisou. Guarda de onde veio em
+  // provaOrigemId só pra, se alguma questão já tiver sido excluída do
+  // banco, o servidor ainda saber de onde puxar o retrato dela.
   function duplicarProva() {
+    Estado.provaOrigemId = Estado.provaAtualId;
     Estado.provaAtualId = null;
     Estado.provaAtualStatus = null;
     statusEnvioEl.textContent = 'Duplicado. Esta agora é uma prova nova — edite à vontade e salve ou envie quando quiser.';

@@ -32,6 +32,17 @@ const Estado = {
   // atualiza esse registro ou cria um novo — nunca escreve por cima de
   // uma prova que não é mais um rascunho.
   provaAtualStatus: null,
+  // Preenchido só por "Duplicar como nova prova": a prova de onde essa
+  // cópia veio. Mandado ao servidor como dica pra recuperar o retrato de
+  // uma questão que já foi excluída do banco, mesmo numa prova que ainda
+  // nunca foi salva por conta própria.
+  provaOrigemId: null,
+  // Retrato (não a questão viva) de toda questão que apareceu em alguma
+  // prova carregada e que já não existe mais no banco — id -> objeto.
+  // Existe pra uma prova antiga continuar aparecendo inteira na tela
+  // mesmo depois que uma das questões dela foi excluída (ver
+  // arquivarQuestoesDeProva e questaoPorId).
+  questoesArquivadas: {},
 };
 
 // Lista fixa de cursos/períodos, carregada uma vez de /api/constantes e
@@ -122,7 +133,22 @@ function alternarSelecao(id) {
 }
 
 function questaoPorId(id) {
-  return Estado.questoes.find((questao) => questao.id === id) || null;
+  return Estado.questoes.find((questao) => questao.id === id) || Estado.questoesArquivadas[id] || null;
+}
+
+// Chamado sempre que uma lista de provas é carregada (ver painel.js).
+// Guarda o retrato de cada questão que a prova já não referencia mais no
+// banco — assim ela continua aparecendo completa em qualquer lugar que
+// use questaoPorId (a revisão da montagem, o drawer de revisão da
+// Direção), mesmo que já tenha sido excluída.
+function arquivarQuestoesDeProva(provas) {
+  (Array.isArray(provas) ? provas : [provas]).forEach((prova) => {
+    (prova?.questoesSnapshot || []).forEach((questao) => {
+      if (questao?.id && !Estado.questoesArquivadas[questao.id]) {
+        Estado.questoesArquivadas[questao.id] = { ...questao, codigo: 'Arquivada', arquivada: true };
+      }
+    });
+  });
 }
 
 function questoesSelecionadas() {
@@ -1289,6 +1315,7 @@ window.App = {
   alternarSelecao,
   salvarSelecao,
   questaoPorId,
+  arquivarQuestoesDeProva,
   questoesSelecionadas,
   pontuacaoSelecionada,
   pedirJson,

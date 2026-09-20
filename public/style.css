@@ -814,6 +814,11 @@
     background: var(--claret); color: #fff; font-family: var(--mono); font-size: 0.62rem;
     letter-spacing: 0.06em; text-transform: uppercase; vertical-align: middle;
   }
+  .tag-arquivada {
+    display: inline-block; margin-left: 0.5rem; padding: 0.1rem 0.5rem; border-radius: 999px;
+    background: var(--ink-faint); color: #fff; font-family: var(--mono); font-size: 0.62rem;
+    letter-spacing: 0.06em; text-transform: uppercase; vertical-align: middle;
+  }
 
   .revisao-acoes { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.2rem; }
   .revisao-acoes .btn-perigo.largo { width: 100%; }

@@ -70,6 +70,7 @@
             <span class="codigo">${escapeHtml(questao.codigo || '')}</span>
             <span class="pontos">${formatarPontos(questao.valor)} pts</span>
             <span class="item-origem">${escapeHtml(questao.assunto || '')} · ${escapeHtml(rotuloPeriodo(questao))}</span>
+            ${questao.arquivada ? '<span class="tag-arquivada" title="Foi excluída do banco depois desta prova ter sido montada">Excluída do banco</span>' : ''}
           </div>
           <p class="item-texto">${escapeHtml(resumir(textoLimpo(questao), 180) || '(vazio)')}</p>
           <label class="item-revisao-check">

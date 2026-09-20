@@ -521,6 +521,25 @@ function dadosDaProva(corpo, questoes) {
   };
 }
 
+// Busca, tolerando falha, o retrato (questoesSnapshot) já guardado em
+// provas existentes — a que está sendo editada/regerada (corpo.id) e/ou
+// a que deu origem a ela (corpo.origemId, ver "Duplicar como nova
+// prova"). Nunca confia em conteúdo vindo do cliente: só reaproveita o
+// que o próprio servidor já tinha salvo antes, pra preencher questões
+// que já não existem mais no banco.
+async function coletarSnapshotDisponivel(req, ids) {
+  const mapa = new Map();
+  const listas = await Promise.all(
+    [...new Set(ids.filter(Boolean))].map(async (id) => {
+      const prova = await buscarProvaPorId(id).catch(() => null);
+      if (!prova || !podeUsarCurso(req, prova.curso)) return [];
+      return prova.questoesSnapshot || [];
+    }),
+  );
+  listas.flat().forEach((questao) => { if (questao?.id) mapa.set(questao.id, questao); });
+  return mapa;
+}
+
 // Validação comum às três ações do Passo 3 (gerar arquivo, salvar
 // rascunho, enviar para o coordenador): confere o limite de questões, se
 // o professor leciona no curso da prova e busca as questões escolhidas,
@@ -548,8 +567,25 @@ async function validarESelecionarQuestoes(req, corpo) {
     }
   }
 
-  const questoes = await buscarQuestoesPorIds(questaoIds);
-  const foraDoCurso = questoes.find((questao) => !podeUsarCurso(req, questao.curso));
+  const snapshotPorId = await coletarSnapshotDisponivel(req, [corpo.id, corpo.origemId]);
+  const encontradas = await buscarQuestoesPorIds(questaoIds);
+  const porId = new Map(encontradas.map((questao) => [questao.id, questao]));
+
+  // Preserva a ordem escolhida pelo professor. Usa a versão atual do
+  // banco quando ela ainda existe; cai pro retrato salvo quando a
+  // questão já foi excluída — reabrir, reimprimir ou duplicar uma prova
+  // antiga nunca perde conteúdo por causa disso. Só quando a questão não
+  // está em nenhum dos dois (provas de antes desse recurso existir) é
+  // que ela some de vez, sem jeito de recuperar.
+  const questoes = questaoIds
+    .map((id) => porId.get(id) || (snapshotPorId.has(id) ? { ...snapshotPorId.get(id), arquivada: true } : null))
+    .filter(Boolean);
+
+  if (!questoes.length) {
+    throw Object.assign(new Error('Nenhuma questão desta prova está mais disponível.'), { statusCode: 404 });
+  }
+
+  const foraDoCurso = questoes.find((questao) => questao.curso && !podeUsarCurso(req, questao.curso));
   if (foraDoCurso) {
     throw Object.assign(
       new Error('Uma ou mais questões selecionadas não pertencem a um curso que você leciona.'),
@@ -562,7 +598,8 @@ async function validarESelecionarQuestoes(req, corpo) {
 // Os campos que salvarRascunho/enviarParaCoordenador/registrarProva
 // gravam no Firestore — separado de dadosDaProva porque este último
 // monta os dados para o *arquivo* (inclui o texto de cada questão), e
-// este monta os dados para o *registro* no Painel (só os IDs).
+// este monta os dados para o *registro* no Painel (os IDs + o retrato de
+// cada questão, pra sobreviver a uma exclusão do banco).
 function dadosParaRegistro(corpo, questoes, req) {
   return {
     id: corpo.id || undefined,
@@ -572,6 +609,20 @@ function dadosParaRegistro(corpo, questoes, req) {
     etapa: corpo.etapa,
     data: corpo.data,
     questaoIds: questoes.map((questao) => questao.id),
+    questoesSnapshot: questoes.map((questao) => ({
+      id: questao.id,
+      texto: questao.texto || '',
+      conteudoHtml: questao.conteudoHtml || '',
+      assunto: questao.assunto || 'Outros',
+      curso: questao.curso || null,
+      periodo: questao.periodo || null,
+      valor: Number(questao.valor) || 1,
+      ano: questao.ano ?? null,
+      banca: questao.banca || null,
+      orgao: questao.orgao || null,
+      prova: questao.prova || null,
+      tipoOrigem: questao.tipoOrigem || 'manual',
+    })),
     pontuacaoTotal: questoes.reduce((soma, questao) => soma + Number(questao.valor || 0), 0),
     criadoPorId: req.usuarioId,
   };
@@ -587,7 +638,12 @@ async function gerarProva(req, res, formato) {
       ? montarDocxProva(dados)
       : await montarPdfProva(dados);
 
-    await registrarUsoQuestoes(questoes.map((questao) => questao.id));
+    // Só conta uso de quem ainda está no banco de verdade — uma questão
+    // reaproveitada só do retrato (já excluída) não tem mais documento
+    // pra incrementar, e como o registro de uso é em lote, incluir um ID
+    // inexistente derrubaria a atualização das outras questões também.
+    const idsAindaNoBanco = questoes.filter((questao) => !questao.arquivada).map((questao) => questao.id);
+    await registrarUsoQuestoes(idsAindaNoBanco);
 
     // O registro alimenta o Painel do professor. Falhar aqui não invalida
     // um arquivo que já foi gerado — o download continua. Gerar o
