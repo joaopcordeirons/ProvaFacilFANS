@@ -755,20 +755,23 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
   }
 });
 
-// O professor só pode excluir uma prova enquanto ela ainda não foi
-// enviada para a Direção (status "rascunho"). Uma vez em análise,
-// aprovada ou reprovada, ela já está com o coordenador e fica só
-// leitura — não importa qual desses três status ela tenha.
+// A Direção pode excluir qualquer prova. O professor só pode excluir as
+// próprias enquanto ainda forem rascunho — depois de enviada para a
+// Direção (em análise, aprovada ou reprovada), só a Direção decide.
 app.delete('/api/provas/:id', async (req, res) => {
   try {
     const existente = await buscarProvaPorId(req.params.id);
     if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
-    if (!podeUsarCurso(req, existente.curso)) {
-      return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+
+    if (req.usuario.perfil !== 'direcao') {
+      if (!podeUsarCurso(req, existente.curso)) {
+        return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+      }
+      if (existente.status !== 'rascunho') {
+        return res.status(403).json({ erro: 'Essa prova já foi enviada para o coordenador — só a Direção pode excluí-la agora.' });
+      }
     }
-    if (existente.status !== 'rascunho') {
-      return res.status(403).json({ erro: 'Essa prova já foi enviada para o coordenador e não pode mais ser excluída.' });
-    }
+
     return res.json(await excluirProva(req.params.id));
   } catch (err) {
     console.error('Erro ao excluir a prova:', err.message);

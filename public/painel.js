@@ -130,10 +130,9 @@
     // tela de Revisão — o professor não tem como alterá-lo por aqui.
     const statusHtml = `<span class="status-badge ${status.classe}">${escapeHtml(status.rotulo)}</span>`;
 
-    // Só dá pra excluir enquanto a prova ainda é um rascunho — depois de
-    // enviada para a Direção (em análise, aprovada ou reprovada), ela
-    // fica só leitura por aqui.
-    const podeExcluir = !direcao && prova.status === 'rascunho';
+    // A Direção pode excluir qualquer prova; o professor só a própria,
+    // enquanto ainda for rascunho.
+    const podeExcluir = direcao || prova.status === 'rascunho';
     const botaoExcluir = podeExcluir ? '<button type="button" class="excluir" data-excluir>Excluir</button>' : '';
 
     return `
