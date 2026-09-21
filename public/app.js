@@ -166,6 +166,16 @@ async function pedirJson(caminho, opcoes) {
   return dados;
 }
 
+// Como pedirJson, mas para respostas em PDF (prévia na tela): devolve o Blob.
+async function pedirPdf(caminho, opcoes) {
+  const resposta = await fetch(API_BASE + caminho, opcoes);
+  if (!resposta.ok) {
+    const dados = await resposta.json().catch(() => ({}));
+    throw new Error(dados.erro || 'Falha ao montar a prévia do PDF.');
+  }
+  return resposta.blob();
+}
+
 /* ---------------------------------------------------------------- navegação */
 
 const VIEWS = {
@@ -1319,6 +1329,7 @@ window.App = {
   questoesSelecionadas,
   pontuacaoSelecionada,
   pedirJson,
+  pedirPdf,
   mostrarView,
   carregarQuestoes,
   renderizarBanco,

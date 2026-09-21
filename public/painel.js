@@ -240,7 +240,11 @@
 
     // A Direção pode ter reprovado (ou só deixado um comentário) — isso
     // vira um aviso fixo no passo de revisão, não um popup que some.
-    Estado.provaFeedback = (prova.comentarioCoordenador || (prova.questoesReprovadas || []).length)
+    // Aparece sempre que a Direção já se posicionou (aprovou, reprovou ou
+    // está analisando) — mesmo sem comentário, o professor precisa ver o
+    // resultado no topo da tela.
+    Estado.provaFeedback = (prova.status !== 'rascunho'
+      || prova.comentarioCoordenador || (prova.questoesReprovadas || []).length)
       ? {
         id: prova.id,
         status: prova.status,
@@ -254,6 +258,7 @@
     Estado.provaOrigemId = null;
     Estado.selecionadas = [...(prova.questaoIds || [])];
     window.App.salvarSelecao();
+    window.MontagemProva?.preencherCabecalho(prova);
     window.MontagemProva?.resetarEnvio();
     renderizarBanco();
     mostrarView('revisao');

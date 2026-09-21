@@ -180,13 +180,31 @@
         <button type="button" class="btn-secundario" id="btnVoltarMontagem">← Voltar para a seleção</button>
       </header>
 
+      <div class="aviso-revisao aviso-destaque oculto" id="avisoFeedbackDirecao" role="status"></div>
+
       <div class="duas-colunas">
         <section>
-          <div class="secao-titulo">
-            Ordem das questões <span class="contador" id="contadorRevisao"></span>
-            <button type="button" class="btn-link-perigo oculto" id="btnRemoverSelecionadas">Remover selecionadas</button>
+          <div class="abas-prova" role="tablist">
+            <button type="button" class="aba-prova ativa" role="tab" data-aba-revisao="questoes" id="abaQuestoes">Questões</button>
+            <button type="button" class="aba-prova" role="tab" data-aba-revisao="previa" id="abaPrevia">Prévia do PDF</button>
           </div>
-          <div class="lista-revisao" id="listaRevisao"></div>
+
+          <div id="painelAbaQuestoes">
+            <div class="secao-titulo">
+              Ordem das questões <span class="contador" id="contadorRevisao"></span>
+              <button type="button" class="btn-link-perigo oculto" id="btnRemoverSelecionadas">Remover selecionadas</button>
+            </div>
+            <div class="lista-revisao" id="listaRevisao"></div>
+          </div>
+
+          <div id="painelAbaPrevia" class="oculto">
+            <div class="previa-barra">
+              <span class="previa-status" id="statusPrevia"></span>
+              <a class="btn-link oculto" id="linkPreviaNovaAba" target="_blank" rel="noopener">Abrir em nova aba</a>
+              <button type="button" class="btn-link" id="btnAtualizarPrevia">Atualizar prévia</button>
+            </div>
+            <iframe id="previaPdf" title="Prévia do PDF da prova"></iframe>
+          </div>
         </section>
 
         <aside class="resumo-prova">
@@ -225,12 +243,6 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         </aside>
       </div>
 
-      <div class="aviso-revisao oculto" id="avisoFeedbackDirecao"></div>
-
-      <section class="panel oculto" id="painelPreviaPdf">
-        <div class="secao-titulo">Prévia do PDF gerado</div>
-        <iframe id="previaPdf" title="Prévia do PDF da prova"></iframe>
-      </section>
     </main>
 
     <!-- ===================== TELA 04 · PERFIL ===================== -->
@@ -463,7 +475,20 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         </button>
       </div>
 
-      <div class="drawer-body">
+      <div class="abas-prova abas-drawer" role="tablist">
+        <button type="button" class="aba-prova ativa" role="tab" data-aba-direcao="prova">Prova em PDF</button>
+        <button type="button" class="aba-prova" role="tab" data-aba-direcao="decisao">Questões e decisão</button>
+      </div>
+
+      <div class="drawer-body" id="painelDirecaoPdf">
+        <div class="previa-barra">
+          <span class="previa-status" id="statusPreviaDirecao"></span>
+          <a class="btn-link oculto" id="linkPreviaDirecaoNovaAba" target="_blank" rel="noopener">Abrir em nova aba</a>
+        </div>
+        <iframe id="previaPdfDirecao" class="previa-drawer" title="Prova em PDF para revisão"></iframe>
+      </div>
+
+      <div class="drawer-body oculto" id="painelDirecaoDecisao">
         <div class="aviso-revisao oculto" id="revisaoAvisoAnterior"></div>
 
         <div class="secao-titulo">Questões da prova <span class="contador" id="contadorRevisaoQuestoes"></span></div>

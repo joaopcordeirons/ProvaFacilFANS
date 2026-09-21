@@ -282,6 +282,14 @@ function camposDaProva(dados) {
     periodo: String(dados.periodo || '').slice(0, 40),
     etapa: String(dados.etapa || '').slice(0, 20),
     data: String(dados.data || '').slice(0, 20),
+    // Resto do cabeçalho — guardado para a prévia do PDF (na tela da
+    // Direção e ao reabrir a prova) sair igual ao que o professor montou.
+    valorProva: String(dados.valorProva || '').slice(0, 20),
+    professor: String(dados.professor || '').slice(0, 120),
+    instrucoes: String(dados.instrucoes || '').slice(0, 2000),
+    linhasResposta: Number.isFinite(Number(dados.linhasResposta))
+      ? Math.max(0, Math.min(Math.trunc(Number(dados.linhasResposta)), 20))
+      : 5,
     questaoIds,
     // Um retrato do conteúdo de cada questão no momento em que a prova
     // foi salva — não só o ID. É o que garante que a prova continue

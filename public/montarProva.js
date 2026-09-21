@@ -23,7 +23,10 @@
   const statusEnvioEl = document.getElementById('statusEnvio');
   const linkPdfEl = document.getElementById('linkPdf');
   const previaPdfEl = document.getElementById('previaPdf');
-  const painelPreviaPdfEl = document.getElementById('painelPreviaPdf');
+  const painelAbaQuestoesEl = document.getElementById('painelAbaQuestoes');
+  const painelAbaPreviaEl = document.getElementById('painelAbaPrevia');
+  const statusPreviaEl = document.getElementById('statusPrevia');
+  const linkPreviaNovaAbaEl = document.getElementById('linkPreviaNovaAba');
   const btnSalvarRascunhoEl = document.getElementById('btnSalvarRascunho');
   const btnEnviarCoordenadorEl = document.getElementById('btnEnviarCoordenador');
   const avisoProvaTravadaEl = document.getElementById('avisoProvaTravada');
@@ -40,6 +43,13 @@
   const idsParaRemoverEmLote = new Set();
 
   let urlArquivoAtual = null;
+
+  // Prévia do PDF na própria tela (aba "Prévia do PDF" do passo 3).
+  let abaAtiva = 'questoes';
+  let urlPrevia = null;
+  let chavePrevia = null; // o que a prévia exibida representa (evita refazer à toa)
+  let controladorPrevia = null;
+  let temporizadorPrevia = null;
 
   /* --------------------------------------------- passo 2: seleção */
 
@@ -174,8 +184,11 @@
     }
     const rotulo = STATUS_ROTULO_FEEDBACK[feedback.status] || STATUS_ROTULO_FEEDBACK.rascunho;
     avisoFeedbackEl.className = `aviso-revisao ${STATUS_CLASSE_FEEDBACK[feedback.status] || ''}`;
+    const semComentario = feedback.status === 'em_revisao'
+      ? 'A Direção ainda está avaliando esta prova.'
+      : 'Nenhum comentário foi deixado.';
     avisoFeedbackEl.innerHTML = `<strong>${escapeHtml(rotulo)}</strong>`
-      + (feedback.comentario ? escapeHtml(feedback.comentario) : 'Nenhum comentário foi deixado.')
+      + (feedback.comentario ? escapeHtml(feedback.comentario) : semComentario)
       + (feedback.questoesReprovadas.length
         ? ` ${feedback.questoesReprovadas.length === 1 ? 'A questão sinalizada está marcada' : 'As questões sinalizadas estão marcadas'} abaixo.`
         : '');
@@ -232,6 +245,7 @@
       btnSalvarRascunhoEl.disabled = true;
       btnEnviarCoordenadorEl.disabled = true;
       atualizarBotaoRemoverLote();
+      limparPrevia('Selecione ao menos uma questão para ver a prévia.');
       return;
     }
 
@@ -282,6 +296,119 @@
     });
 
     atualizarBotaoRemoverLote();
+    agendarPrevia();
+  }
+
+  /* ------------------------------------------------ prévia do PDF */
+
+  function definirStatusPrevia(texto, erro = false) {
+    statusPreviaEl.textContent = texto;
+    statusPreviaEl.className = `previa-status${erro ? ' erro' : ''}`;
+  }
+
+  function limparPrevia(mensagem) {
+    controladorPrevia?.abort();
+    clearTimeout(temporizadorPrevia);
+    if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+    urlPrevia = null;
+    chavePrevia = null;
+    previaPdfEl.removeAttribute('src');
+    linkPreviaNovaAbaEl.classList.add('oculto');
+    definirStatusPrevia(mensagem || '');
+  }
+
+  function mostrarBlobNaPrevia(blob) {
+    if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+    urlPrevia = URL.createObjectURL(blob);
+    previaPdfEl.src = `${urlPrevia}#view=FitH`;
+    linkPreviaNovaAbaEl.href = urlPrevia;
+    linkPreviaNovaAbaEl.classList.remove('oculto');
+  }
+
+  // De onde vem a prévia: uma prova já enviada para a Direção é mostrada
+  // exatamente como foi salva (é o que ela revisou); enquanto ainda é
+  // rascunho, vale o que está no formulário agora.
+  function origemDaPrevia() {
+    const ids = Estado.selecionadas.slice();
+    if (Estado.provaAtualId && provaEstaTravada()) {
+      return { salva: true, ids, chave: `salva:${Estado.provaAtualId}` };
+    }
+    const corpo = { ...dadosDoCabecalho(), questaoIds: ids };
+    return { salva: false, ids, corpo, chave: JSON.stringify(corpo) };
+  }
+
+  async function atualizarPrevia({ forcar = false } = {}) {
+    if (!Estado.selecionadas.length) {
+      limparPrevia('Selecione ao menos uma questão para ver a prévia.');
+      return;
+    }
+    const origem = origemDaPrevia();
+    if (!forcar && origem.chave === chavePrevia) return;
+
+    controladorPrevia?.abort();
+    const controlador = new AbortController();
+    controladorPrevia = controlador;
+    definirStatusPrevia('Montando a prévia…');
+
+    try {
+      const blob = origem.salva
+        ? await window.App.pedirPdf(`/api/provas/${encodeURIComponent(Estado.provaAtualId)}/previa-pdf`, { signal: controlador.signal })
+        : await window.App.pedirPdf('/api/provas/previa-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...origem.corpo, id: Estado.provaAtualId || undefined }),
+          signal: controlador.signal,
+        });
+      if (controlador.signal.aborted) return;
+      mostrarBlobNaPrevia(blob);
+      chavePrevia = origem.chave;
+      definirStatusPrevia(origem.salva
+        ? 'Prova como foi salva e enviada para a Direção.'
+        : 'Prévia do que está no formulário agora.');
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      definirStatusPrevia(err.message, true);
+    }
+  }
+
+  // Só refaz a prévia quando ela está na tela — e espera o professor
+  // parar de digitar/reordenar antes de pedir o PDF ao servidor.
+  function agendarPrevia() {
+    clearTimeout(temporizadorPrevia);
+    if (abaAtiva !== 'previa') return;
+    temporizadorPrevia = setTimeout(() => atualizarPrevia(), 350);
+  }
+
+  function selecionarAba(aba) {
+    abaAtiva = aba;
+    document.querySelectorAll('[data-aba-revisao]').forEach((botao) => {
+      botao.classList.toggle('ativa', botao.dataset.abaRevisao === aba);
+    });
+    painelAbaQuestoesEl.classList.toggle('oculto', aba !== 'questoes');
+    painelAbaPreviaEl.classList.toggle('oculto', aba !== 'previa');
+    const telaVisivel = !document.getElementById('viewRevisao').classList.contains('oculto');
+    if (aba === 'previa' && telaVisivel) atualizarPrevia();
+  }
+
+  // Preenche o cabeçalho com o que ficou salvo na prova — assim a tela e a
+  // prévia refletem a prova aberta, e não o que sobrou da anterior. Campos
+  // que a prova não guardou (provas antigas) ficam como estão.
+  function preencherCabecalho(prova) {
+    prepararCabecalhoProva();
+    const definir = (id, valor) => {
+      const campo = document.getElementById(id);
+      if (campo && valor !== undefined && valor !== null && valor !== '') campo.value = valor;
+    };
+    definir('campoTitulo', prova.titulo);
+    definir('campoCurso', prova.curso);
+    definir('campoPeriodo', prova.periodo);
+    definir('campoEtapa', prova.etapa);
+    definir('campoValorProva', prova.valorProva);
+    definir('campoProfessor', prova.professor);
+    definir('campoInstrucoes', prova.instrucoes);
+    definir('campoLinhas', prova.linhasResposta);
+    const [dia, mes, ano] = String(prova.data || '').split('/');
+    if (dia && mes && ano) campoData.value = `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
   }
 
   /* ------------------------------------ geração do arquivo da prova */
@@ -373,13 +500,17 @@
       linkPdfEl.textContent = `Baixar o ${formato.toUpperCase()} novamente`;
       linkPdfEl.classList.remove('oculto');
 
-      // Só o PDF dá para conferir na própria tela.
+      // Só o PDF dá para conferir na própria tela: o arquivo recém-gerado
+      // vira a prévia e a aba dela é aberta.
       if (formato === 'pdf') {
-        previaPdfEl.src = urlArquivoAtual;
-        painelPreviaPdfEl.classList.remove('oculto');
-      } else {
-        previaPdfEl.removeAttribute('src');
-        painelPreviaPdfEl.classList.add('oculto');
+        mostrarBlobNaPrevia(blob);
+        const origem = origemDaPrevia();
+        chavePrevia = origem.chave;
+        definirStatusPrevia(origem.salva
+          ? 'Prova como foi salva e enviada para a Direção.'
+          : 'PDF gerado agora. Prévia do que está no formulário.');
+        selecionarAba('previa');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
       const plural = ids.length === 1 ? 'questão' : 'questões';
@@ -476,6 +607,8 @@
     Estado.provaAtualStatus = null;
     statusEnvioEl.textContent = 'Duplicado. Esta agora é uma prova nova — edite à vontade e salve ou envie quando quiser.';
     statusEnvioEl.className = 'status ok';
+    Estado.provaFeedback = null; // o parecer era da prova anterior
+    selecionarAba('questoes');
     renderizarRevisao();
   }
 
@@ -489,6 +622,16 @@
   btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
   btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
   btnDuplicarProvaEl.addEventListener('click', duplicarProva);
+  document.querySelectorAll('[data-aba-revisao]').forEach((botao) => {
+    botao.addEventListener('click', () => selecionarAba(botao.dataset.abaRevisao));
+  });
+  document.getElementById('btnAtualizarPrevia').addEventListener('click', () => atualizarPrevia({ forcar: true }));
+  CAMPOS_CABECALHO_IDS.forEach((id) => {
+    const campo = document.getElementById(id);
+    if (!campo) return;
+    campo.addEventListener('input', agendarPrevia);
+    campo.addEventListener('change', agendarPrevia);
+  });
   btnRemoverSelecionadasEl.addEventListener('click', () => {
     if (!idsParaRemoverEmLote.size) return;
     idsParaRemoverEmLote.forEach((id) => alternarSelecao(id));
@@ -509,8 +652,12 @@
     idsParaRemoverEmLote.clear();
     statusEnvioEl.textContent = '';
     statusEnvioEl.className = 'status';
+    // Prova já enviada não tem o que editar: o que interessa é vê-la como
+    // ficou. Rascunho e prova nova abrem na lista de questões.
+    limparPrevia('');
+    selecionarAba(provaEstaTravada() ? 'previa' : 'questoes');
   }
 
-  window.MontagemProva = { renderizarMontagem, renderizarRevisao, resetarEnvio };
+  window.MontagemProva = { renderizarMontagem, renderizarRevisao, resetarEnvio, preencherCabecalho };
   renderizarMontagem();
 })();

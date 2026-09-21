@@ -700,7 +700,28 @@
   }
   .item-check-remocao input { margin: 0; width: 15px; height: 15px; cursor: pointer; }
 
-  #previaPdf { width: 100%; height: 70vh; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+  #previaPdf { width: 100%; height: 80vh; min-height: 480px; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+
+  /* Abas "Questões / Prévia do PDF" (passo 3) e "Prova em PDF / Questões e
+     decisão" (drawer da Direção). Classes próprias: .drawer-tab é ligada
+     ao drawer de "Adicionar questão" em app.js. */
+  .abas-prova { display: flex; gap: 1.6rem; border-bottom: 1px solid var(--rule); margin-bottom: 1.1rem; }
+  .aba-prova {
+    padding: 0 0 0.7rem; border: none; border-bottom: 2px solid transparent; background: none;
+    cursor: pointer; font-size: 0.92rem; color: var(--ink-faint); font-family: var(--sans);
+    margin-bottom: -1px;
+  }
+  .aba-prova.ativa { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .aba-prova:not(.ativa):hover { color: var(--ink-muted); }
+  .abas-drawer { padding: 0 1.6rem; margin-bottom: 0; flex-shrink: 0; }
+
+  .previa-barra { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.6rem; font-size: 0.8rem; }
+  .previa-status { margin-right: auto; color: var(--ink-muted); }
+  .previa-status.erro { color: var(--claret); font-weight: 600; }
+  .drawer.larga { width: min(920px, 96vw); }
+  #painelDirecaoPdf { display: flex; flex-direction: column; }
+  #painelDirecaoPdf.oculto { display: none; }
+  .previa-drawer { flex: 1; width: 100%; min-height: 60vh; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
   .link-download { display: inline-block; margin-top: 0.6rem; font-size: 0.82rem; }
 
   @media (max-width: 1100px) {
@@ -780,8 +801,8 @@
   /* ---------- Drawer "Revisão da Direção" ---------- */
   .drawer-subtitulo { margin-top: 0.2rem; font-size: 0.82rem; color: var(--ink-muted); }
 
-  /* Aviso de revisão: tanto o card do drawer da Direção quanto o rodapé
-     do passo 3 (professor). Precisa ser impossível de não notar. */
+  /* Aviso de revisão: tanto o card do drawer da Direção quanto o banner
+     do topo do passo 3 (professor). Precisa ser impossível de não notar. */
   .aviso-revisao {
     border: 2px solid var(--rule-strong); border-left-width: 6px; border-radius: 8px;
     padding: 1.1rem 1.25rem; margin-top: 1.25rem; margin-bottom: 1.15rem;
@@ -798,6 +819,16 @@
   .aviso-revisao.aprovada strong { color: var(--moss); }
   .aviso-revisao.revisao { border-color: var(--amber); background: var(--amber-soft); color: var(--ink); }
   .aviso-revisao.revisao strong { color: var(--amber); }
+
+  /* Versão do topo do passo 3 (professor): logo abaixo do título da tela,
+     antes de qualquer outra coisa — a decisão da Direção é a primeira
+     informação que o professor precisa ver. */
+  .aviso-destaque {
+    margin-top: 0; margin-bottom: 1.5rem;
+    padding: 1.3rem 1.6rem; border-left-width: 10px;
+    font-size: 1.05rem;
+  }
+  .aviso-destaque strong { font-size: 1.4rem; margin-bottom: 0.45rem; }
 
   .item-revisao-check { display: flex; align-items: flex-start; gap: 0.5rem;
     padding: 0.4rem 0.5rem; border-top: 1px dashed var(--rule);

@@ -9,7 +9,7 @@
 (function () {
   const {
     escapeHtml, formatarPontos, textoLimpo, resumir, rotuloPeriodo,
-    questaoPorId, pedirJson,
+    questaoPorId, pedirJson, pedirPdf,
   } = window.App;
 
   const STATUS_ROTULO = {
@@ -29,12 +29,61 @@
   const btnReprovar = document.getElementById('btnReprovarProva');
   const btnAnalise = document.getElementById('btnDeixarEmAnalise');
 
+  const painelPdfEl = document.getElementById('painelDirecaoPdf');
+  const painelDecisaoEl = document.getElementById('painelDirecaoDecisao');
+  const previaEl = document.getElementById('previaPdfDirecao');
+  const statusPreviaEl = document.getElementById('statusPreviaDirecao');
+  const linkNovaAbaEl = document.getElementById('linkPreviaDirecaoNovaAba');
+
   let provaAtual = null;
   let questoesFlagsSet = new Set();
+  let urlPrevia = null;
+  let controladorPrevia = null;
+
+  function limparPrevia(mensagem = '', erro = false) {
+    controladorPrevia?.abort();
+    if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+    urlPrevia = null;
+    previaEl.removeAttribute('src');
+    linkNovaAbaEl.classList.add('oculto');
+    statusPreviaEl.textContent = mensagem;
+    statusPreviaEl.className = `previa-status${erro ? ' erro' : ''}`;
+  }
+
+  // A Direção decide olhando a prova como o professor a imprimiria — o
+  // PDF é montado no servidor a partir do que foi salvo com a prova.
+  async function carregarPrevia(prova) {
+    limparPrevia('Montando o PDF da prova…');
+    const controlador = new AbortController();
+    controladorPrevia = controlador;
+    try {
+      const blob = await pedirPdf(`/api/provas/${encodeURIComponent(prova.id)}/previa-pdf`, { signal: controlador.signal });
+      if (controlador.signal.aborted) return;
+      urlPrevia = URL.createObjectURL(blob);
+      previaEl.src = `${urlPrevia}#view=FitH`;
+      linkNovaAbaEl.href = urlPrevia;
+      linkNovaAbaEl.classList.remove('oculto');
+      statusPreviaEl.textContent = 'Prova como foi enviada pelo professor.';
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      limparPrevia(err.message, true);
+    }
+  }
+
+  function selecionarAba(aba) {
+    document.querySelectorAll('[data-aba-direcao]').forEach((botao) => {
+      botao.classList.toggle('ativa', botao.dataset.abaDirecao === aba);
+    });
+    painelPdfEl.classList.toggle('oculto', aba !== 'prova');
+    painelDecisaoEl.classList.toggle('oculto', aba !== 'decisao');
+    // O PDF precisa de largura para ficar legível.
+    drawerEl.classList.toggle('larga', aba === 'prova');
+  }
 
   function fecharDrawer() {
     drawerEl.classList.add('oculto');
     overlayEl.classList.add('oculto');
+    limparPrevia();
     provaAtual = null;
   }
 
@@ -103,6 +152,9 @@
     renderizarAvisoAnterior(prova);
     renderizarLista(prova);
 
+    selecionarAba('prova');
+    carregarPrevia(prova);
+
     drawerEl.classList.remove('oculto');
     overlayEl.classList.remove('oculto');
   }
@@ -139,6 +191,9 @@
     }
   }
 
+  document.querySelectorAll('[data-aba-direcao]').forEach((botao) => {
+    botao.addEventListener('click', () => selecionarAba(botao.dataset.abaDirecao));
+  });
   document.getElementById('btnFecharDrawerRevisao').addEventListener('click', fecharDrawer);
   overlayEl.addEventListener('click', fecharDrawer);
   btnAprovar.addEventListener('click', () => enviarDecisao('aprovada'));

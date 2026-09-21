@@ -608,6 +608,10 @@ function dadosParaRegistro(corpo, questoes, req) {
     periodo: corpo.periodo || corpo.turma,
     etapa: corpo.etapa,
     data: corpo.data,
+    valorProva: corpo.valorProva,
+    professor: corpo.professor,
+    instrucoes: corpo.instrucoes,
+    linhasResposta: corpo.linhasResposta,
     questaoIds: questoes.map((questao) => questao.id),
     questoesSnapshot: questoes.map((questao) => ({
       id: questao.id,
@@ -671,6 +675,58 @@ async function gerarProva(req, res, formato) {
     });
   }
 }
+
+// Prévia do PDF na tela: monta o mesmo arquivo de "Gerar PDF", mas sem
+// nenhum efeito colateral — não registra a prova no Painel, não conta uso
+// das questões e não dispara download. Por isso pode ser chamada sempre
+// que o professor mexer no cabeçalho ou na ordem das questões.
+function responderPdfInline(res, arquivo) {
+  res.setHeader('Content-Type', MIME_SAIDA.pdf);
+  res.setHeader('Content-Disposition', 'inline; filename="previa.pdf"');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Length', arquivo.length);
+  return res.end(arquivo);
+}
+
+app.post('/api/provas/previa-pdf', express.json({ limit: '1mb' }), async (req, res) => {
+  try {
+    const corpo = req.body || {};
+    const questoes = await validarESelecionarQuestoes(req, corpo);
+    return responderPdfInline(res, await montarPdfProva(dadosDaProva(corpo, questoes)));
+  } catch (err) {
+    console.error('Erro ao montar a prévia do PDF:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao montar a prévia.' });
+  }
+});
+
+// Prévia de uma prova já registrada, a partir do que está salvo (cabeçalho
+// + retrato das questões). É o que a Direção enxerga ao revisar: o mesmo
+// arquivo que o professor imprimiria, sem depender do banco de questões.
+app.get('/api/provas/:id/previa-pdf', async (req, res) => {
+  try {
+    const prova = await buscarProvaPorId(req.params.id);
+    // Rascunho é só do professor: para a Direção ele "não existe" ainda.
+    const invisivel = !prova
+      || (req.usuario.perfil === 'direcao' && prova.status === 'rascunho');
+    if (invisivel) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, prova.curso)) {
+      return res.status(403).json({ erro: 'Você não tem acesso a essa prova.' });
+    }
+
+    const snapshot = Array.isArray(prova.questoesSnapshot) ? prova.questoesSnapshot : [];
+    const porId = new Map(snapshot.map((questao) => [questao.id, questao]));
+    const ordenadas = (prova.questaoIds || []).map((id) => porId.get(id)).filter(Boolean);
+    const questoes = ordenadas.length ? ordenadas : snapshot;
+    if (!questoes.length) {
+      return res.status(404).json({ erro: 'Esta prova não tem questões salvas para exibir.' });
+    }
+
+    return responderPdfInline(res, await montarPdfProva(dadosDaProva(prova, questoes)));
+  } catch (err) {
+    console.error('Erro ao montar a prévia da prova salva:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao montar a prévia.' });
+  }
+});
 
 app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'pdf'));
 app.post('/api/provas/gerar-docx', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'docx'));
