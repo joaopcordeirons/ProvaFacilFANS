@@ -484,6 +484,20 @@
     color: var(--ink-muted);
     font-family: var(--mono);
   }
+  /* Mesma cara do .badge, mas editável: o professor pode corrigir na mão
+     quando o sistema classifica errado se a questão é múltipla escolha
+     ou dissertativa (ver identificarErenderizarQuestoes em app.js). */
+  .select-tipo-questao {
+    font-size: 0.72rem;
+    padding: 0.12rem 1.3rem 0.12rem 0.5rem;
+    border-radius: 4px;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    color: var(--ink-muted);
+    font-family: var(--mono);
+    cursor: pointer;
+  }
+  .select-tipo-questao:focus { outline: none; border-color: var(--accent); }
   .questao-candidata textarea {
     min-height: 120px;
     font-family: var(--sans);
