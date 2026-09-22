@@ -194,6 +194,20 @@ async function buscarUsuarioPorId(id) {
   return doc ? formatarUsuarioPublico(doc) : null;
 }
 
+// Lista os e-mails de todos os usuários da Direção que não desligaram as
+// notificações por e-mail no próprio perfil — usado para avisar quando
+// um professor envia uma prova para revisão.
+async function listarEmailsDirecao() {
+  const banco = exigirFirestore();
+  const snapshot = await banco.collection('usuarios')
+    .where('perfil', '==', 'direcao')
+    .get();
+  return snapshot.docs
+    .map((doc) => doc.data())
+    .filter((dados) => dados.notificacoesEmail !== false && dados.email)
+    .map((dados) => dados.email);
+}
+
 // Gera um token de recuperação (string aleatória) para o e-mail informado
 // e guarda só o hash dele no Firestore, com validade de 1h. Sempre
 // retorna algo — se o e-mail não existir, o token simplesmente não bate
@@ -358,6 +372,7 @@ module.exports = {
   criarUsuario,
   autenticar,
   buscarUsuarioPorId,
+  listarEmailsDirecao,
   gerarTokenRecuperacao,
   redefinirSenhaComToken,
   verificarEmailComToken,

@@ -134,6 +134,10 @@
     // enquanto ainda for rascunho.
     const podeExcluir = direcao || prova.status === 'rascunho';
     const botaoExcluir = podeExcluir ? '<button type="button" class="excluir" data-excluir>Excluir</button>' : '';
+    // Enviar por e-mail funciona pra prova em qualquer status — de
+    // rascunho a aprovada — é só compartilhar o arquivo, não muda nada
+    // no fluxo de revisão.
+    const botaoEnviarEmail = '<button type="button" class="enviar-email" data-enviar-email>Enviar por e-mail</button>';
 
     return `
       <tr data-id="${escapeHtml(prova.id)}">
@@ -144,7 +148,7 @@
         <td data-th="Status">${statusHtml}</td>
         <td class="discreta" data-th="Última atualização">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
         <td class="acao" data-th="">
-          <span class="acao-padrao"><button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button>${botaoExcluir}</span>
+          <span class="acao-padrao"><button type="button" data-abrir>${direcao ? 'Revisar →' : 'Ver →'}</button>${botaoEnviarEmail}${botaoExcluir}</span>
         </td>
       </tr>
     `;
@@ -191,6 +195,69 @@
           evento.stopPropagation();
           pedirConfirmacaoExclusao(linha, prova);
         });
+      }
+      linha.querySelector('[data-enviar-email]').addEventListener('click', (evento) => {
+        evento.stopPropagation();
+        pedirEnvioEmail(linha, prova);
+      });
+    });
+  }
+
+  // Troca a célula de ações pelo formulário de "Enviar por e-mail":
+  // e-mails separados por vírgula, formato do arquivo e uma mensagem
+  // opcional. Mesmo padrão inline da confirmação de exclusão, sem popup
+  // do navegador.
+  function pedirEnvioEmail(linha, prova) {
+    const celulaAcao = linha.querySelector('.acao');
+    celulaAcao.innerHTML = `
+      <form class="form-enviar-email">
+        <input type="text" class="campo-destinatarios" placeholder="e-mail@exemplo.com, outro@exemplo.com" required>
+        <select class="campo-formato-email">
+          <option value="pdf">PDF</option>
+          <option value="docx">DOCX</option>
+        </select>
+        <input type="text" class="campo-mensagem-email" placeholder="Mensagem (opcional)">
+        <button type="submit">Enviar</button>
+        <button type="button" class="cancelar-envio-email">Cancelar</button>
+      </form>
+    `;
+
+    celulaAcao.querySelector('.campo-destinatarios').focus();
+
+    celulaAcao.querySelector('.cancelar-envio-email').addEventListener('click', (evento) => {
+      evento.stopPropagation();
+      renderizarTabela();
+    });
+
+    const formulario = celulaAcao.querySelector('.form-enviar-email');
+    formulario.addEventListener('click', (evento) => evento.stopPropagation());
+    formulario.addEventListener('submit', async (evento) => {
+      evento.preventDefault();
+      const destinatarios = celulaAcao.querySelector('.campo-destinatarios').value
+        .split(/[,;\s]+/)
+        .map((email) => email.trim())
+        .filter(Boolean);
+      if (!destinatarios.length) return;
+
+      const botaoEnviar = formulario.querySelector('button[type="submit"]');
+      botaoEnviar.disabled = true;
+      formulario.querySelector('.cancelar-envio-email').disabled = true;
+      botaoEnviar.textContent = 'Enviando...';
+      try {
+        await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}/enviar-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            destinatarios,
+            formato: celulaAcao.querySelector('.campo-formato-email').value,
+            mensagem: celulaAcao.querySelector('.campo-mensagem-email').value,
+          }),
+        });
+        celulaAcao.innerHTML = '<span class="acao-sucesso">Prova enviada por e-mail.</span>';
+        setTimeout(renderizarTabela, 1800);
+      } catch (err) {
+        celulaAcao.innerHTML = `<span class="acao-erro">${escapeHtml(err.message)}</span>`;
+        setTimeout(renderizarTabela, 2600);
       }
     });
   }

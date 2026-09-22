@@ -13,7 +13,7 @@ const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./ext
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
-const { buscarEmailsPorRemetente, excluirEmailPorUid, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
+const { buscarEmailsPorRemetente, excluirEmailPorUid, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao, notificarProvaEnviada, notificarRevisaoProva, enviarProvaPorEmail } = require('./emailService');
 const {
   criarQuestao,
   listarQuestoes,
@@ -35,6 +35,7 @@ const {
   criarUsuario,
   autenticar,
   buscarUsuarioPorId,
+  listarEmailsDirecao,
   gerarTokenRecuperacao,
   redefinirSenhaComToken,
   verificarEmailComToken,
@@ -733,6 +734,82 @@ app.get('/api/provas/:id/previa-pdf', async (req, res) => {
 app.post('/api/provas/gerar-pdf', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'pdf'));
 app.post('/api/provas/gerar-docx', express.json({ limit: '1mb' }), (req, res) => gerarProva(req, res, 'docx'));
 
+// Valida a lista de destinatários do "Enviar por e-mail": endereços
+// únicos, em formato válido, com um teto razoável por envio (evita que o
+// campo vire uma lista de disparo em massa sem querer).
+function validarDestinatarios(lista) {
+  const REGEX_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const normalizados = [...new Set(
+    (Array.isArray(lista) ? lista : [])
+      .map((email) => String(email || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+  if (!normalizados.length) {
+    throw Object.assign(new Error('Informe ao menos um destinatário.'), { statusCode: 400 });
+  }
+  if (normalizados.length > 10) {
+    throw Object.assign(new Error('No máximo 10 destinatários por envio.'), { statusCode: 400 });
+  }
+  const invalido = normalizados.find((email) => !REGEX_EMAIL.test(email));
+  if (invalido) {
+    throw Object.assign(new Error(`E-mail inválido: ${invalido}`), { statusCode: 400 });
+  }
+  return normalizados;
+}
+
+// "Enviar por e-mail": o professor (ou a Direção) manda o arquivo da
+// prova pra quem quiser, em qualquer status — rascunho, em análise,
+// aprovada ou reprovada. Ação explícita, separada do fluxo de "Enviar
+// para o coordenador": não muda o status nem passa pela revisão da
+// Direção, é só compartilhar o arquivo já pronto.
+app.post('/api/provas/:id/enviar-email', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    if (!credenciaisConfiguradas()) {
+      return res.status(500).json({
+        erro: 'GMAIL_USER e GMAIL_APP_PASSWORD não configurados no .env do servidor.',
+      });
+    }
+
+    const prova = await buscarProvaPorId(req.params.id);
+    const invisivel = !prova
+      || (req.usuario.perfil === 'direcao' && prova.status === 'rascunho');
+    if (invisivel) return res.status(404).json({ erro: 'Prova não encontrada.' });
+    if (!podeUsarCurso(req, prova.curso)) {
+      return res.status(403).json({ erro: 'Você não tem acesso a essa prova.' });
+    }
+
+    const corpo = req.body || {};
+    const destinatarios = validarDestinatarios(corpo.destinatarios);
+    const formato = corpo.formato === 'docx' ? 'docx' : 'pdf';
+
+    const snapshot = Array.isArray(prova.questoesSnapshot) ? prova.questoesSnapshot : [];
+    const porId = new Map(snapshot.map((questao) => [questao.id, questao]));
+    const ordenadas = (prova.questaoIds || []).map((id) => porId.get(id)).filter(Boolean);
+    const questoes = ordenadas.length ? ordenadas : snapshot;
+    if (!questoes.length) {
+      return res.status(404).json({ erro: 'Esta prova não tem questões salvas para gerar o arquivo.' });
+    }
+
+    const dados = dadosDaProva(prova, questoes);
+    const arquivo = formato === 'docx' ? montarDocxProva(dados) : await montarPdfProva(dados);
+
+    await enviarProvaPorEmail({
+      destinatarios,
+      remetenteNome: req.usuario.nome,
+      mensagem: corpo.mensagem,
+      prova,
+      arquivo,
+      nomeArquivo: nomeArquivo(prova.titulo, formato),
+      mime: MIME_SAIDA[formato],
+    });
+
+    return res.json({ ok: true, destinatarios });
+  } catch (err) {
+    console.error('Erro ao enviar a prova por e-mail:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao enviar a prova por e-mail.' });
+  }
+});
+
 // "Salvar rascunho": grava o cabeçalho e as questões escolhidas sem
 // enviar nada para a Direção. Sem corpo.id cria uma prova nova; com
 // corpo.id atualiza o rascunho já salvo antes.
@@ -748,6 +825,18 @@ app.post('/api/provas/rascunho', express.json({ limit: '1mb' }), async (req, res
   }
 });
 
+// Dispara uma notificação por e-mail sem nunca derrubar a rota que
+// chamou: falha de e-mail (Gmail fora do ar, sem credenciais etc.) vira
+// só um aviso no log — a ação principal (enviar/revisar a prova) já
+// aconteceu e não deve ser desfeita por causa disso.
+async function notificarComCuidado(promessa, contexto) {
+  try {
+    await promessa;
+  } catch (err) {
+    console.warn(`Não foi possível enviar a notificação por e-mail (${contexto}):`, err.message);
+  }
+}
+
 // "Enviar para o coordenador": ação explícita do professor — sem ela a
 // prova fica em rascunho, só visível para ele mesmo, e a Direção nunca
 // fica sabendo que ela existe.
@@ -756,6 +845,20 @@ app.post('/api/provas/enviar', express.json({ limit: '1mb' }), async (req, res) 
     const corpo = req.body || {};
     const questoes = await validarESelecionarQuestoes(req, corpo);
     const prova = await enviarParaCoordenador(dadosParaRegistro(corpo, questoes, req));
+
+    // Aguarda o e-mail (mesmo padrão do resto do app — ex.: verificação
+    // de cadastro — pra funcionar também em ambiente serverless, onde a
+    // função pode ser encerrada assim que a resposta é enviada).
+    await notificarComCuidado((async () => {
+      const destinatarios = await listarEmailsDirecao();
+      await notificarProvaEnviada({
+        destinatarios,
+        professorNome: req.usuario.nome,
+        prova,
+        linkPainel: `${origemDoPedido(req)}/index.html`,
+      });
+    })(), 'prova enviada para revisão');
+
     return res.status(corpo.id ? 200 : 201).json(prova);
   } catch (err) {
     console.error('Erro ao enviar a prova para o coordenador:', err.message);
@@ -806,6 +909,22 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
       questoesReprovadas,
       revisorId: req.usuarioId,
     });
+
+    // Avisa quem criou a prova (se ainda tiver conta ativa e e-mail) que
+    // a Direção se posicionou. Igual à notificação de envio: aguarda o
+    // e-mail, mas nunca deixa uma falha nele derrubar a revisão em si.
+    await notificarComCuidado((async () => {
+      if (!atualizada.criadoPorId) return;
+      const autor = await buscarUsuarioPorId(atualizada.criadoPorId);
+      if (!autor?.email) return;
+      await notificarRevisaoProva({
+        destino: autor.email,
+        nomeProfessor: autor.nome,
+        prova: atualizada,
+        linkPainel: `${origemDoPedido(req)}/index.html`,
+      });
+    })(), 'revisão de prova');
+
     return res.json(atualizada);
   } catch (err) {
     console.error('Erro ao revisar a prova:', err.message);

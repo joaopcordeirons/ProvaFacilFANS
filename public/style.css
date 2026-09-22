@@ -855,8 +855,34 @@
     border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; margin-left: 0.5rem;
   }
   table.tabela-provas .acao .excluir:hover { color: var(--claret); border-color: var(--claret); opacity: 0.85; }
+  table.tabela-provas .acao .enviar-email {
+    border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent);
+    border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; margin-left: 0.5rem;
+  }
+  table.tabela-provas .acao .enviar-email:hover { color: var(--accent); border-color: var(--accent); opacity: 0.85; }
   table.tabela-provas .acao .confirmacao-exclusao { margin-top: 0; white-space: normal; justify-content: flex-end; }
   table.tabela-provas .acao .acao-erro { color: var(--claret); font-size: 0.78rem; }
+  table.tabela-provas .acao .acao-sucesso { color: var(--moss); font-size: 0.78rem; }
+  .form-enviar-email {
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+    justify-content: flex-end; white-space: normal;
+  }
+  .form-enviar-email .campo-destinatarios { min-width: 220px; flex: 1 1 220px; }
+  .form-enviar-email .campo-mensagem-email { min-width: 160px; flex: 1 1 160px; }
+  .form-enviar-email input, .form-enviar-email select {
+    border: 1px solid var(--rule); border-radius: 5px; padding: 0.32rem 0.5rem;
+    font-size: 0.78rem; font-family: var(--sans); color: var(--ink); background: var(--surface);
+  }
+  .form-enviar-email input:focus, .form-enviar-email select:focus { outline: none; border-color: var(--accent); }
+  .form-enviar-email button[type="submit"] {
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; cursor: pointer; font-family: var(--sans);
+  }
+  .form-enviar-email button[type="submit"]:disabled { opacity: 0.6; cursor: not-allowed; }
+  .form-enviar-email .cancelar-envio-email {
+    border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-muted);
+    border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; cursor: pointer; font-family: var(--sans);
+  }
 
   /* Status como rótulo fixo — ninguém edita por aqui (nem professor, nem
      Direção); a decisão é sempre tomada na tela de Revisão. Feito pra
@@ -1122,11 +1148,17 @@
     .header-acoes .btn-primary { width: 100%; }
 
     /* Botões e campos com alvo de toque confortável */
-    .btn-primary, .btn-escuro, .btn-secundario, button.enviar,
+    .btn-primary, .btn-escuro, .btn-secundario, button.enviar, .enviar-email,
     .campo input, .campo select, .campo textarea, .campo-busca input, .campo-select {
       min-height: 44px;
     }
     .campo textarea { min-height: 90px; }
+
+    /* "Enviar por e-mail" ocupa a largura toda do cartão no mobile, em
+       vez de espremer ao lado dos outros botões da ação. */
+    .form-enviar-email { width: 100%; justify-content: flex-start; }
+    .form-enviar-email .campo-destinatarios, .form-enviar-email .campo-mensagem-email,
+    .form-enviar-email select, .form-enviar-email button { width: 100%; flex-basis: 100%; }
 
     /* Formulários lado a lado viram empilhados */
     .campos-lado-a-lado, .classificacao { grid-template-columns: 1fr; }

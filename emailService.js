@@ -228,10 +228,97 @@ async function enviarEmailVerificacao(destino, nome, link) {
   return { enviado: true };
 }
 
+/* ------------------------------------------------ notificações de provas */
+
+function escaparHtmlEmail(texto) {
+  return String(texto || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+const ROTULOS_STATUS_PROVA = {
+  aprovada: 'aprovada',
+  reprovada: 'reprovada',
+  em_revisao: 'colocada em análise',
+};
+
+// Avisa a Direção (uma ou mais pessoas) quando um professor envia uma
+// prova para revisão. Quem chama já filtrou os destinatários pelo
+// próprio campo notificacoesEmail de cada um — aqui só dispara.
+async function notificarProvaEnviada({ destinatarios, professorNome, prova, linkPainel }) {
+  const cliente = obterTransportador();
+  if (!cliente || !destinatarios || !destinatarios.length) return { enviado: false };
+
+  const tituloSeguro = escaparHtmlEmail(prova.titulo);
+  const cursoSeguro = escaparHtmlEmail(prova.curso || '');
+  const nomeSeguro = escaparHtmlEmail(professorNome);
+
+  await cliente.sendMail({
+    from: `"ProvaFácil FANS" <${process.env.GMAIL_USER}>`,
+    to: destinatarios.join(', '),
+    subject: `Nova prova para revisar: ${prova.titulo}`,
+    text: `${professorNome} enviou a prova "${prova.titulo}" (${prova.curso || ''}) para sua revisão.\n\nAcesse o painel para aprovar, reprovar ou comentar:\n${linkPainel}`,
+    html: `<p><strong>${nomeSeguro}</strong> enviou a prova <strong>${tituloSeguro}</strong>${cursoSeguro ? ` (${cursoSeguro})` : ''} para sua revisão.</p><p><a href="${linkPainel}">Acessar o painel</a></p>`,
+  });
+  return { enviado: true };
+}
+
+// Avisa o professor (autor da prova) quando a Direção muda o status:
+// aprova, reprova ou devolve para análise.
+async function notificarRevisaoProva({ destino, nomeProfessor, prova, linkPainel }) {
+  const cliente = obterTransportador();
+  if (!cliente || !destino) return { enviado: false };
+
+  const rotulo = ROTULOS_STATUS_PROVA[prova.status] || prova.status;
+  const comentario = String(prova.comentarioCoordenador || '').trim();
+  const tituloSeguro = escaparHtmlEmail(prova.titulo);
+  const comentarioSeguro = escaparHtmlEmail(comentario);
+
+  await cliente.sendMail({
+    from: `"ProvaFácil FANS" <${process.env.GMAIL_USER}>`,
+    to: destino,
+    subject: `Sua prova "${prova.titulo}" foi ${rotulo}`,
+    text: `Olá, ${nomeProfessor}.\n\nSua prova "${prova.titulo}" (${prova.curso || ''}) foi ${rotulo} pela Direção.${comentario ? `\n\nComentário da Direção: ${comentario}` : ''}\n\nAcesse o painel para ver os detalhes:\n${linkPainel}`,
+    html: `<p>Olá, ${escaparHtmlEmail(nomeProfessor)}.</p><p>Sua prova <strong>${tituloSeguro}</strong> foi <strong>${escaparHtmlEmail(rotulo)}</strong> pela Direção.</p>${comentario ? `<p>Comentário da Direção: ${comentarioSeguro}</p>` : ''}<p><a href="${linkPainel}">Acessar o painel</a></p>`,
+  });
+  return { enviado: true };
+}
+
+// Envia o arquivo de uma prova (PDF ou DOCX) por e-mail para quem quem
+// está usando o sistema escolher — de qualquer status (rascunho,
+// aprovada etc). Diferente das notificações acima, é uma ação explícita
+// de quem clica em "Enviar por e-mail", então não passa pelo filtro de
+// notificacoesEmail (esse é só para os avisos automáticos).
+async function enviarProvaPorEmail({ destinatarios, remetenteNome, mensagem, prova, arquivo, nomeArquivo, mime }) {
+  const cliente = obterTransportador();
+  if (!cliente) {
+    throw new Error('GMAIL_USER e GMAIL_APP_PASSWORD não configurados no .env do servidor.');
+  }
+
+  const mensagemLimpa = String(mensagem || '').trim().slice(0, 2000);
+  const tituloSeguro = escaparHtmlEmail(prova.titulo);
+  const remetenteSeguro = escaparHtmlEmail(remetenteNome);
+  const mensagemSeguraHtml = escaparHtmlEmail(mensagemLimpa).replace(/\n/g, '<br>');
+
+  await cliente.sendMail({
+    from: `"ProvaFácil FANS" <${process.env.GMAIL_USER}>`,
+    to: destinatarios.join(', '),
+    subject: `Prova: ${prova.titulo}`,
+    text: `${remetenteNome} compartilhou a prova "${prova.titulo}" com você.${mensagemLimpa ? `\n\n${mensagemLimpa}` : ''}\n\nO arquivo está em anexo.`,
+    html: `<p><strong>${remetenteSeguro}</strong> compartilhou a prova <strong>${tituloSeguro}</strong> com você.</p>${mensagemLimpa ? `<p>${mensagemSeguraHtml}</p>` : ''}<p>O arquivo está em anexo.</p>`,
+    attachments: [{ filename: nomeArquivo, content: arquivo, contentType: mime }],
+  });
+  return { enviado: true };
+}
+
 module.exports = {
   buscarEmailsPorRemetente,
   excluirEmailPorUid,
   credenciaisConfiguradas,
   enviarEmailRecuperacao,
   enviarEmailVerificacao,
+  notificarProvaEnviada,
+  notificarRevisaoProva,
+  enviarProvaPorEmail,
 };
