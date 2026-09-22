@@ -369,6 +369,8 @@
   }
   .editor:focus { border-color: var(--accent); }
   .editor:empty::before { content: attr(data-placeholder); color: var(--ink-faint); }
+  .editor-questao,
+  .texto-questao-candidata.editor { min-height: 140px; }
 
   /* Botão "Negrito": propositalmente com a palavra escrita por extenso
      (em vez de um ícone "B"), pra quem não reconhece o símbolo abreviado
@@ -395,25 +397,6 @@
   .botao-negrito:hover { border-color: var(--rule-strong); background: var(--paper); }
   .botao-negrito strong { font-weight: 700; }
   .dica-negrito { font-size: 0.78rem; color: var(--ink-muted); }
-  .pre-visualizacao-negrito {
-    margin-top: 0.5rem;
-    padding: 0.7rem 0.85rem;
-    border: 1px dashed var(--rule);
-    border-radius: 6px;
-    background: var(--paper);
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: var(--ink);
-    white-space: pre-wrap;
-  }
-  .pre-visualizacao-negrito .rotulo-preview {
-    display: block;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--ink-faint);
-    margin-bottom: 0.3rem;
-  }
   .status-inline { margin-top: 0.55rem; font-size: 0.8rem; color: var(--ink-muted); }
   .status-inline.erro { color: var(--claret); }
   .oculto { display: none !important; }

@@ -83,106 +83,122 @@ function textoLimpo(questao) {
 }
 
 /* --------------------------------------------------- negrito nas questões
- * O professor marca negrito selecionando um trecho do texto e clicando no
- * botão "Negrito" (escrito por extenso de propósito — nada de ícone "B",
- * que muita gente não reconhece). O trecho selecionado é envolvido em
- * **dois asteriscos**, a mesma marcação lida pelo PDF e pelo DOCX na hora
- * de montar a prova (ver dividirNegrito em modeloProva.js). A prévia logo
- * abaixo do campo mostra como aquele trecho vai sair no documento final,
- * pra quem tem dificuldade poder conferir sem precisar gerar a prova.
+ * O professor seleciona um trecho do texto e clica no botão "Negrito"
+ * (escrito por extenso de propósito — nada de ícone "B", que muita gente
+ * não reconhece). O trecho fica em negrito NA HORA, visualmente, dentro do
+ * próprio campo — igual ao Word — em vez de aparecer com asteriscos ou
+ * qualquer símbolo que precise de explicação.
+ *
+ * Por baixo dos panos, ao salvar a questão, o negrito visual (<strong>) é
+ * convertido para a marcação **assim**, que é o formato salvo no banco e
+ * lido pelo PDF/DOCX na hora de montar a prova (dividirNegrito, em
+ * modeloProva.js). Ao reabrir uma questão pra editar, o processo é
+ * inverso: **assim** volta a aparecer como negrito de verdade no campo.
  */
 
-// HTML da barra com o botão e a prévia — usar antes do campo de texto.
+// HTML da barra com o botão — usar antes do campo de texto (que deve ser
+// um <div contenteditable="true">, não um <textarea>: só assim dá pra
+// mostrar o negrito de verdade enquanto a pessoa edita).
 function barraNegritoHtml() {
   return `
     <div class="barra-negrito">
       <button type="button" class="botao-negrito" aria-label="Deixar em negrito o texto selecionado no campo abaixo">
         <strong>Negrito</strong>
       </button>
-      <span class="dica-negrito">Selecione um trecho do texto abaixo e clique aqui para destacá-lo em negrito na prova.</span>
+      <span class="dica-negrito">Selecione um trecho do texto abaixo e clique aqui para deixá-lo em negrito.</span>
     </div>
   `;
 }
 
-// HTML da prévia — usar logo depois do campo de texto.
-function previaNegritoHtml() {
-  return `<div class="pre-visualizacao-negrito" aria-live="polite"></div>`;
-}
-
-// Converte o texto salvo (com **marcações**) no HTML da prévia, com
-// <strong> de verdade no lugar dos asteriscos.
-function renderizarNegrito(texto) {
+// Converte o texto salvo (com **marcações**) no HTML inicial do campo de
+// edição, já com <strong> de verdade no lugar dos asteriscos.
+function htmlEdicaoComNegrito(texto) {
   return escapeHtml(String(texto || ''))
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
 }
 
-// Liga o botão "Negrito" e a prévia a um campo de texto (textarea comum ou
-// div contenteditable). `campo`, `botao` e `previa` são os próprios
-// elementos, não ids — assim funciona tanto em campos fixos do HTML quanto
-// nos campos criados dinamicamente (uma questão candidata por cartão).
-function configurarNegrito(campo, botao, previa) {
-  if (!campo || !botao) return;
-  const ehTextarea = campo.tagName === 'TEXTAREA';
+// Um nó é "negrito" se for <b>/<strong> ou tiver font-weight forte (o
+// execCommand pode gerar qualquer um dos dois, dependendo do navegador).
+function noEhNegrito(no) {
+  if (no.nodeType !== Node.ELEMENT_NODE) return false;
+  if (no.tagName === 'B' || no.tagName === 'STRONG') return true;
+  const peso = no.style && no.style.fontWeight;
+  return peso === 'bold' || peso === '700' || Number(peso) >= 600;
+}
 
-  function atualizarPrevia() {
-    if (!previa) return;
-    const bruto = ehTextarea ? campo.value : campo.innerText;
-    previa.innerHTML = bruto.trim()
-      ? `<span class="rotulo-preview">Assim vai aparecer na prova</span>${renderizarNegrito(bruto)}`
-      : '';
-  }
-
-  function aplicarNoTextarea() {
-    const inicio = campo.selectionStart;
-    const fim = campo.selectionEnd;
-    if (inicio === fim) {
-      window.alert('Primeiro selecione (destacando com o mouse ou o teclado) o trecho do texto que deve ficar em negrito.');
-      return;
+// Percorre o conteúdo de um campo contenteditable e devolve o texto puro
+// com **marcações** no lugar do negrito visual — o formato salvo no banco.
+function obterTextoComMarcadores(elemento) {
+  function percorrer(no, negritoHerdado) {
+    if (no.nodeType === Node.TEXT_NODE) {
+      const valor = no.nodeValue || '';
+      if (!valor) return '';
+      return negritoHerdado ? `**${valor}**` : valor;
     }
-    const valor = campo.value;
-    campo.value = `${valor.slice(0, inicio)}**${valor.slice(inicio, fim)}**${valor.slice(fim)}`;
-    campo.focus();
-    campo.setSelectionRange(inicio + 2, fim + 2);
+    if (no.nodeType !== Node.ELEMENT_NODE) return '';
+    if (no.tagName === 'BR') return '\n';
+    const negritoAqui = negritoHerdado || noEhNegrito(no);
+    const filhos = Array.from(no.childNodes).map((filho) => percorrer(filho, negritoAqui)).join('');
+    // Navegadores costumam envolver cada linha nova (Enter) em <div>/<p>.
+    return (no.tagName === 'DIV' || no.tagName === 'P') ? `${filhos}\n` : filhos;
   }
+  const bruto = Array.from(elemento.childNodes).map((no) => percorrer(no, false)).join('');
+  return bruto.replace(/\n+$/, '');
+}
 
-  function aplicarNoContentEditable() {
+// Lê o valor atual de um campo de texto de questão, seja ele um
+// <textarea> comum ou um <div contenteditable>.
+function lerTextoDoCampo(elemento) {
+  if (!elemento) return '';
+  return elemento.tagName === 'TEXTAREA' ? elemento.value : obterTextoComMarcadores(elemento);
+}
+
+// Escreve um texto (com **marcações**) de volta num campo, respeitando o
+// mesmo negrito visual de verdade.
+function escreverTextoNoCampo(elemento, texto) {
+  if (!elemento) return;
+  if (elemento.tagName === 'TEXTAREA') elemento.value = texto;
+  else elemento.innerHTML = htmlEdicaoComNegrito(texto);
+}
+
+// Trava um campo depois de salvo, sem depender de ser textarea ou div.
+function travarCampo(elemento) {
+  if (!elemento) return;
+  if (elemento.tagName === 'TEXTAREA') elemento.readOnly = true;
+  else elemento.contentEditable = 'false';
+}
+
+// Liga o botão "Negrito" a um campo contenteditable: aplica o negrito de
+// verdade (document.execCommand) só no trecho selecionado.
+function configurarNegrito(campo, botao) {
+  if (!campo || !botao) return;
+
+  // Força o navegador a usar <b>/<strong> em vez de <span style="...">,
+  // pra obterTextoComMarcadores não precisar adivinhar todo tipo de CSS.
+  try { document.execCommand('styleWithCSS', false, false); } catch (erro) { /* navegador antigo, ignora */ }
+
+  // Evita que o clique no botão tire o foco/seleção do campo antes do
+  // clique ser processado — essencial em contenteditable.
+  botao.addEventListener('mousedown', (evento) => evento.preventDefault());
+  botao.addEventListener('click', () => {
     const selecao = window.getSelection();
     if (!selecao || selecao.rangeCount === 0 || selecao.isCollapsed || !campo.contains(selecao.anchorNode)) {
       window.alert('Primeiro selecione (destacando com o mouse ou o teclado) o trecho do texto que deve ficar em negrito.');
       return;
     }
-    const intervalo = selecao.getRangeAt(0);
-    const conteudo = intervalo.toString();
-    intervalo.deleteContents();
-    intervalo.insertNode(document.createTextNode(`**${conteudo}**`));
-    selecao.removeAllRanges();
-  }
-
-  // Evita que o clique no botão tire o foco/seleção do campo antes do
-  // clique ser processado (fundamental no contenteditable).
-  botao.addEventListener('mousedown', (evento) => evento.preventDefault());
-  botao.addEventListener('click', () => {
-    if (ehTextarea) aplicarNoTextarea();
-    else aplicarNoContentEditable();
-    atualizarPrevia();
+    campo.focus();
+    document.execCommand('bold');
   });
-
-  campo.addEventListener('input', atualizarPrevia);
-  atualizarPrevia();
 }
 
-// Conveniência para os campos fixos do HTML: a barra e a prévia usam a
-// classe/estrutura padrão logo ao lado do campo com o id informado.
+// Conveniência para os campos fixos do HTML: o botão fica na barra logo
+// ao lado do campo com o id informado.
 function configurarNegritoPorId(idCampo) {
   const campo = document.getElementById(idCampo);
   if (!campo) return;
   const container = campo.closest('label') || campo.parentElement;
-  configurarNegrito(
-    campo,
-    container ? container.querySelector('.botao-negrito') : null,
-    container ? container.querySelector('.pre-visualizacao-negrito') : null,
-  );
+  configurarNegrito(campo, container ? container.querySelector('.botao-negrito') : null);
 }
 
 function resumir(texto, limite) {
@@ -669,8 +685,7 @@ function renderizarFormularioEdicao(questao) {
 
     <label class="campo">Enunciado (e alternativas, uma por linha)
       ${barraNegritoHtml()}
-      <textarea id="edicaoTexto" rows="8">${escapeHtml(questao.texto || '')}</textarea>
-      ${previaNegritoHtml()}
+      <div id="edicaoTexto" class="editor editor-questao" contenteditable="true">${htmlEdicaoComNegrito(questao.texto)}</div>
     </label>
 
     <div class="campos-lado-a-lado">
@@ -713,7 +728,7 @@ function renderizarFormularioEdicao(questao) {
   });
 
   document.getElementById('btnSalvarEdicao').addEventListener('click', async (evento) => {
-    const texto = document.getElementById('edicaoTexto').value.trim();
+    const texto = lerTextoDoCampo(document.getElementById('edicaoTexto')).trim();
     if (!texto) {
       statusEl.textContent = 'O enunciado não pode ficar vazio.';
       statusEl.className = 'status erro';
@@ -1086,8 +1101,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
         <span class="badge">${questao.alternativas && questao.alternativas.length ? 'múltipla escolha' : 'dissertativa'}</span>
       </div>
       ${barraNegritoHtml()}
-      <textarea class="texto-questao-candidata">${escapeHtml(montarTextoQuestao(questao))}</textarea>
-      ${previaNegritoHtml()}
+      <div class="texto-questao-candidata editor" contenteditable="true">${htmlEdicaoComNegrito(montarTextoQuestao(questao))}</div>
       <div class="classificacao">
         <label class="campo">Assunto
           <input type="text" class="campo-assunto" list="assuntosConhecidos" placeholder="Ex.: Padrões de Projeto">
@@ -1120,11 +1134,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
 
     const textareaEl = item.querySelector('.texto-questao-candidata');
     const avisoEl = item.querySelector('.status-inline');
-    configurarNegrito(
-      textareaEl,
-      item.querySelector('.botao-negrito'),
-      item.querySelector('.pre-visualizacao-negrito'),
-    );
+    configurarNegrito(textareaEl, item.querySelector('.botao-negrito'));
 
     item.querySelector('.btn-descartar-candidata').addEventListener('click', () => item.remove());
 
@@ -1141,7 +1151,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
         // Separa linhas de alternativa (A), B) etc.) do resto, mas MANTÉM
         // todas as outras linhas juntas no enunciado — dissertativas longas
         // podem ocupar várias linhas.
-        const linhas = textareaEl.value.split('\n');
+        const linhas = lerTextoDoCampo(textareaEl).split('\n');
         const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
         const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
         const dados = await pedirJson('/api/questoes/verificar-conteudo', {
@@ -1177,7 +1187,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
       caixaVerificacao.className = 'verificacao-conteudo';
       caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
       try {
-        const linhas = textareaEl.value.split('\n');
+        const linhas = lerTextoDoCampo(textareaEl).split('\n');
         const alternativasAtuais = linhas.filter((l) => /^[A-E]\)/.test(l.trim()));
         const enunciadoAtual = linhas.filter((l) => !/^[A-E]\)/.test(l.trim())).join('\n');
         const dados = await pedirJson('/api/questoes/corrigir-com-ia', {
@@ -1193,7 +1203,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
           // revisar. Nada é salvo automaticamente.
           const partes = [dados.enunciado];
           if (dados.alternativas && dados.alternativas.length) partes.push('', ...dados.alternativas);
-          textareaEl.value = partes.join('\n').trim();
+          escreverTextoNoCampo(textareaEl, partes.join('\n').trim());
           const possivelPerdaDeConteudo = (dados.observacao || '').toLowerCase().startsWith('[atenção]');
           const observacaoLimpa = (dados.observacao || '').replace(/^\[atenção\]\s*/i, '');
           caixaVerificacao.className = possivelPerdaDeConteudo
@@ -1213,7 +1223,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
     });
 
     item.querySelector('.btn-salvar-candidata').addEventListener('click', async (evento) => {
-      if (!textareaEl.value.trim()) {
+      if (!lerTextoDoCampo(textareaEl).trim()) {
         avisoEl.className = 'status-inline erro';
         avisoEl.textContent = 'A questão não pode ficar vazia.';
         return;
@@ -1225,7 +1235,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
       avisoEl.textContent = 'Salvando no Firebase...';
       try {
         await salvarQuestaoNoFirebase({
-          texto: textareaEl.value,
+          texto: lerTextoDoCampo(textareaEl),
           tipoOrigem,
           nomeArquivo,
           assunto: item.querySelector('.campo-assunto').value,
@@ -1237,7 +1247,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
         item.classList.add('salva');
         avisoEl.className = 'status-inline';
         avisoEl.textContent = 'Salva com sucesso.';
-        textareaEl.readOnly = true;
+        travarCampo(textareaEl);
         botao.textContent = 'Salva';
         item.querySelector('.btn-descartar-candidata').classList.add('oculto');
         carregarQuestoes();
@@ -1257,13 +1267,12 @@ const editorQuestao = document.getElementById('editorQuestao');
 configurarNegrito(
   editorQuestao,
   editorQuestao ? editorQuestao.parentElement.querySelector('.botao-negrito') : null,
-  editorQuestao ? editorQuestao.parentElement.querySelector('.pre-visualizacao-negrito') : null,
 );
 const statusEditadaEl = document.getElementById('statusEditada');
 const listaQuestoesIdentificadasManualEl = document.getElementById('listaQuestoesIdentificadasManual');
 
 document.getElementById('btnSalvarEditada').addEventListener('click', async () => {
-  const texto = editorQuestao.innerText.trim();
+  const texto = lerTextoDoCampo(editorQuestao).trim();
   if (!texto) {
     statusEditadaEl.textContent = 'Escreva ou cole um texto antes de identificar.';
     statusEditadaEl.className = 'status erro';
