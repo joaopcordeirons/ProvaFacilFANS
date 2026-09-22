@@ -663,7 +663,7 @@ function renderizarDetalhe() {
     </div>
 
     <h2 class="detalhe-assunto">${escapeHtml(questao.assunto)}</h2>
-    <blockquote class="detalhe-enunciado">${escapeHtml(questao.texto || '(vazio)')}</blockquote>
+    <blockquote class="detalhe-enunciado">${questao.texto ? htmlEdicaoComNegrito(questao.texto) : '(vazio)'}</blockquote>
 
     <dl class="detalhe-dados">
       <div><dt>Curso</dt><dd>${escapeHtml(questao.curso || '—')}</dd></div>
