@@ -89,6 +89,18 @@ function paginaProtegida(req, res, next) {
   }
 }
 
+// Lê o perfil da sessão sem lançar erro (usado só para decidir para qual
+// página redirecionar — quem exige a sessão de fato é paginaProtegida).
+function perfilDaSessao(req) {
+  const token = lerToken(req);
+  if (!token) return null;
+  try {
+    return jwt.verify(token, segredo()).perfil || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 module.exports = {
   NOME_COOKIE,
   gerarToken,
@@ -96,4 +108,5 @@ module.exports = {
   limparCookieSessao,
   exigirAutenticacao,
   paginaProtegida,
+  perfilDaSessao,
 };

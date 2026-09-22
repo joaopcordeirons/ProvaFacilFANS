@@ -52,6 +52,7 @@ const {
   limparCookieSessao,
   exigirAutenticacao,
   paginaProtegida,
+  perfilDaSessao,
 } = require('./authMiddleware');
 const { montarPdfProva } = require('./provaPdf');
 const { montarDocxProva } = require('./provaDocx');
@@ -67,7 +68,17 @@ app.use(cookieParser());
 // login, o navegador é redirecionado para a tela de login. As demais
 // páginas estáticas (login.html, style.css, app.js...) continuam
 // públicas, senão nem a tela de login carregaria.
-app.get(['/', '/index.html'], paginaProtegida);
+// A Repografia tem uma tela própria (repografia.html), bem mais simples
+// que o painel do professor/direção: se ela cair na raiz, é mandada pra
+// lá; e o contrário também — professor/direção não usam repografia.html.
+app.get(['/', '/index.html'], paginaProtegida, (req, res, next) => {
+  if (perfilDaSessao(req) === 'repografia') return res.redirect('/repografia.html');
+  return next();
+});
+app.get('/repografia.html', paginaProtegida, (req, res, next) => {
+  if (perfilDaSessao(req) !== 'repografia') return res.redirect('/');
+  return next();
+});
 
 // Serve a interface web (public/) em http://localhost:3001
 app.use(express.static(path.join(__dirname, 'public')));
@@ -190,7 +201,8 @@ app.post('/api/auth/login', express.json({ limit: '10kb' }), async (req, res) =>
       });
     }
     if (perfil && usuario.perfil !== perfil) {
-      const rotulo = usuario.perfil === 'direcao' ? 'Direção' : 'Professor';
+      const ROTULOS_PERFIL = { direcao: 'Direção', repografia: 'Repografia', professor: 'Professor' };
+      const rotulo = ROTULOS_PERFIL[usuario.perfil] || 'Professor';
       return res.status(403).json({
         erro: `Essa conta está cadastrada como ${rotulo}. Selecione o perfil correto para entrar.`,
       });
@@ -351,14 +363,15 @@ app.use('/api/provas', exigirAutenticacao);
 // Carrega o usuário completo (perfil + cursos) a cada request nessas
 // rotas — em vez de confiar só no que está no cookie — para que uma
 // mudança de curso feita agora mesmo no Perfil já valha na hora, sem
-// precisar deslogar. Direção sempre tem acesso irrestrito (cursosPermitidos
-// null = sem filtro); professor só aos cursos em que está cadastrado.
+// precisar deslogar. Direção e Repografia sempre têm acesso irrestrito a
+// cursos (cursosPermitidos null = sem filtro); professor só aos cursos em
+// que está cadastrado.
 async function carregarUsuarioCompleto(req, res, next) {
   try {
     const usuario = await buscarUsuarioPorId(req.usuarioId);
     if (!usuario) return res.status(401).json({ erro: 'Sessão inválida.' });
     req.usuario = usuario;
-    req.cursosPermitidos = usuario.perfil === 'direcao' ? null : usuario.cursos;
+    req.cursosPermitidos = usuario.perfil === 'professor' ? usuario.cursos : null;
     return next();
   } catch (err) {
     return res.status(err.statusCode || 500).json({ erro: err.message });
@@ -367,8 +380,31 @@ async function carregarUsuarioCompleto(req, res, next) {
 app.use('/api/questoes', carregarUsuarioCompleto);
 app.use('/api/provas', carregarUsuarioCompleto);
 
+// A Repografia não mexe no banco de questões de jeito nenhum — só
+// consulta e baixa provas já aprovadas. Bloqueia tudo em /api/questoes.
+app.use('/api/questoes', (req, res, next) => {
+  if (req.usuario.perfil === 'repografia') {
+    return res.status(403).json({ erro: 'Repografia não tem acesso ao banco de questões.' });
+  }
+  return next();
+});
+
+// Dentro de /api/provas, a Repografia só pode listar (GET /) e baixar o
+// PDF de uma prova específica (GET /:id/previa-pdf) — nada de criar,
+// enviar por e-mail, revisar ou excluir. req.path já vem sem o prefixo
+// /api/provas por causa do app.use abaixo.
+app.use('/api/provas', (req, res, next) => {
+  if (req.usuario.perfil !== 'repografia') return next();
+  const rotaPermitida = req.method === 'GET'
+    && (req.path === '/' || /^\/[^/]+\/previa-pdf$/.test(req.path));
+  if (!rotaPermitida) {
+    return res.status(403).json({ erro: 'Repografia só pode consultar e baixar provas aprovadas.' });
+  }
+  return next();
+});
+
 // Confere se o professor tem permissão sobre um curso específico
-// (direção sempre tem). Usado antes de criar/editar/excluir.
+// (direção e repografia sempre têm). Usado antes de criar/editar/excluir.
 function podeUsarCurso(req, curso) {
   return req.cursosPermitidos === null || req.cursosPermitidos.includes(curso);
 }
@@ -729,8 +765,11 @@ app.get('/api/provas/:id/previa-pdf', async (req, res) => {
   try {
     const prova = await buscarProvaPorId(req.params.id);
     // Rascunho é só do professor: para a Direção ele "não existe" ainda.
+    // Repografia só enxerga provas já aprovadas — nem em análise, nem
+    // reprovada, nem rascunho.
     const invisivel = !prova
-      || (req.usuario.perfil === 'direcao' && prova.status === 'rascunho');
+      || (req.usuario.perfil === 'direcao' && prova.status === 'rascunho')
+      || (req.usuario.perfil === 'repografia' && prova.status !== 'aprovada');
     if (invisivel) return res.status(404).json({ erro: 'Prova não encontrada.' });
     if (!podeUsarCurso(req, prova.curso)) {
       return res.status(403).json({ erro: 'Você não tem acesso a essa prova.' });
@@ -896,9 +935,11 @@ app.get('/api/provas', async (req, res) => {
       ? Math.min(Math.max(limiteInformado, 1), 50)
       : 20;
     const provas = await listarProvas(limite, req.cursosPermitidos);
-    const visiveis = req.usuario.perfil === 'direcao'
-      ? provas.filter((prova) => prova.status !== 'rascunho')
-      : provas;
+    const visiveis = req.usuario.perfil === 'repografia'
+      ? provas.filter((prova) => prova.status === 'aprovada')
+      : req.usuario.perfil === 'direcao'
+        ? provas.filter((prova) => prova.status !== 'rascunho')
+        : provas;
     return res.json({ provas: visiveis });
   } catch (err) {
     console.error('Erro ao listar provas:', err.message);

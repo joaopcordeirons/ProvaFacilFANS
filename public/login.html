@@ -32,6 +32,10 @@
             <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 7.2 8 2l6 5.2V14H2z"/><path d="M6 14v-4h4v4"/></svg>
             Direção
           </button>
+          <button type="button" class="perfil-opcao" data-perfil="repografia">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="7" rx="1"/><path d="M4 9v4h8V9M5.5 5.5h5"/></svg>
+            Repografia
+          </button>
         </div>
 
         <form id="formLogin">
@@ -62,7 +66,7 @@
       <!-- ===================== VISTA: CADASTRO ===================== -->
       <div class="login-vista oculto" id="vistaCadastro">
         <h1 class="login-titulo">Criar conta</h1>
-        <p class="login-subtitulo">Cadastro para professores e direção da instituição</p>
+        <p class="login-subtitulo">Cadastro para professores, direção e repografia da instituição</p>
 
         <p class="login-rotulo">Perfil</p>
         <div class="perfil-seletor" id="perfilSeletorCadastro">
@@ -73,6 +77,10 @@
           <button type="button" class="perfil-opcao" data-perfil="direcao">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 7.2 8 2l6 5.2V14H2z"/><path d="M6 14v-4h4v4"/></svg>
             Direção
+          </button>
+          <button type="button" class="perfil-opcao" data-perfil="repografia">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2" width="12" height="7" rx="1"/><path d="M4 9v4h8V9M5.5 5.5h5"/></svg>
+            Repografia
           </button>
         </div>
 
@@ -96,7 +104,7 @@
             <div class="cursos-checklist" id="cadastroCursosChecklist"></div>
             <div class="campo-erro oculto" id="erroCadastroCursos">Selecione pelo menos um curso.</div>
           </div>
-          <label class="campo oculto" id="blocoCadastroCodigoConvite">Código de convite da Direção
+          <label class="campo oculto" id="blocoCadastroCodigoConvite">Código de convite
             <input type="password" id="cadastroCodigoConvite" autocomplete="off">
           </label>
           <label class="campo">Senha

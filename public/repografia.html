@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Repografia — ProvaFácil FANS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .repo-shell { max-width: 980px; margin: 0 auto; padding: 2.5rem 1.5rem 3rem; }
+  .repo-topo {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem; gap: 1rem;
+  }
+  .repo-topo .logo { display: flex; align-items: center; gap: 0.6rem; }
+  .repo-conta { display: flex; align-items: center; gap: 0.75rem; }
+  .repo-conta .conta-nome { font-size: 0.85rem; font-weight: 600; }
+  .repo-conta .conta-legenda { font-size: 0.75rem; color: var(--ink-muted); }
+  .repo-card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 10px; padding: 1.5rem;
+  }
+  .repo-card h1 { font-size: 1.3rem; margin: 0 0 0.3rem; }
+  .repo-card p.subtitle { margin-bottom: 1.5rem; }
+  table.tabela-provas .acao a {
+    font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+    color: var(--accent); text-decoration: none; border: 1px solid var(--rule-strong);
+    border-radius: 6px; padding: 0.35rem 0.7rem; white-space: nowrap;
+  }
+  table.tabela-provas .acao a:hover { border-color: var(--accent); background: var(--accent-soft); }
+</style>
+</head>
+<body>
+  <div class="repo-shell">
+    <div class="repo-topo">
+      <div class="logo">
+        <span class="logo-mark">PF</span>
+        <span class="logo-nome">ProvaFácil · Repografia</span>
+      </div>
+      <div class="repo-conta">
+        <div style="text-align:right;">
+          <div class="conta-nome" id="contaNome">—</div>
+          <div class="conta-legenda">Repografia</div>
+        </div>
+        <div class="avatar" id="avatarConta">··</div>
+        <button type="button" class="fechar-drawer" id="btnSair" title="Sair" aria-label="Sair">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 2H3.5A1.5 1.5 0 0 0 2 3.5v9A1.5 1.5 0 0 0 3.5 14H6M10.5 11.5 14 8l-3.5-3.5M14 8H6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="repo-card">
+      <h1>Provas aprovadas</h1>
+      <p class="subtitle">Prontas para impressão. Clique em “Abrir PDF” para visualizar e baixar.</p>
+      <div id="tabelaProvasRepografia"></div>
+    </div>
+  </div>
+
+  <script src="repografia.js"></script>
+</body>
+</html>

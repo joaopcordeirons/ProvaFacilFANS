@@ -39,9 +39,10 @@ function cursosMarcadosNoCadastro() {
   return [...document.querySelectorAll('#cadastroCursosChecklist input:checked')].map((el) => el.value);
 }
 
-// O bloco de cursos só faz sentido pra Professor — Direção enxerga tudo.
-// Já o código de convite é o contrário: só existe pra Direção, já que é
-// isso que impede qualquer um de criar essa conta com acesso total.
+// O bloco de cursos só faz sentido pra Professor — Direção e Repografia
+// enxergam tudo. Já o código de convite é o contrário: só existe pra
+// Direção e Repografia, já que é isso que impede qualquer um de criar
+// essas contas.
 function atualizarBlocoCursosCadastro() {
   const bloco = document.getElementById('blocoCadastroCursos');
   const blocoConvite = document.getElementById('blocoCadastroCodigoConvite');
@@ -142,7 +143,7 @@ document.getElementById('formLogin').addEventListener('submit', async (evento) =
   btn.disabled = true;
   ultimoEmailLogin = document.getElementById('loginEmail').value.trim();
   try {
-    await pedirJson('/api/auth/login', {
+    const resultado = await pedirJson('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({
         email: ultimoEmailLogin,
@@ -151,7 +152,7 @@ document.getElementById('formLogin').addEventListener('submit', async (evento) =
         lembrarConectado: document.getElementById('loginLembrar').checked,
       }),
     });
-    window.location.href = '/';
+    window.location.href = resultado.usuario?.perfil === 'repografia' ? '/repografia.html' : '/';
   } catch (err) {
     definirStatus('statusLogin', err.message, 'erro');
     if (err.dados?.emailNaoVerificado) btnReenviar.classList.remove('oculto');
@@ -188,8 +189,8 @@ document.getElementById('formCadastro').addEventListener('submit', async (evento
   erroCursosEl.classList.add('oculto');
 
   const codigoConvite = document.getElementById('cadastroCodigoConvite').value.trim();
-  if (perfil === 'direcao' && !codigoConvite) {
-    definirStatus('statusCadastro', 'Informe o código de convite da Direção.', 'erro');
+  if ((perfil === 'direcao' || perfil === 'repografia') && !codigoConvite) {
+    definirStatus('statusCadastro', 'Informe o código de convite.', 'erro');
     return;
   }
 

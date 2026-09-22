@@ -14,7 +14,15 @@ const { CURSOS_VALIDOS } = require('./constantes');
 const CUSTO_HASH = 12; // fator de custo do bcrypt — 12 é o recomendado atual
 const VALIDADE_TOKEN_RECUPERACAO_MS = 60 * 60 * 1000; // 1 hora
 const VALIDADE_TOKEN_VERIFICACAO_MS = 24 * 60 * 60 * 1000; // 24 horas
-const PERFIS_VALIDOS = ['professor', 'direcao'];
+const PERFIS_VALIDOS = ['professor', 'direcao', 'repografia'];
+
+// Código de convite exigido por perfil (variável de ambiente + rótulo
+// usado nas mensagens de erro). Perfis fora deste mapa (professor) não
+// exigem convite — qualquer um pode se cadastrar.
+const CONVITE_POR_PERFIL = {
+  direcao: { variavel: 'CODIGO_CONVITE_DIRECAO', rotulo: 'Direção' },
+  repografia: { variavel: 'CODIGO_CONVITE_REPOGRAFIA', rotulo: 'Repografia' },
+};
 
 function exigirFirestore() {
   const banco = obterFirestore();
@@ -52,30 +60,36 @@ function validarSenha(senha) {
 
 function validarPerfil(perfil) {
   if (!PERFIS_VALIDOS.includes(perfil)) {
-    throw erro('Perfil inválido. Use "professor" ou "direcao".', 400);
+    throw erro('Perfil inválido. Use "professor", "direcao" ou "repografia".', 400);
   }
 }
 
-// Cadastro de Direção não pode ficar aberto a qualquer um: exige um
-// código de convite (CODIGO_CONVITE_DIRECAO no ambiente), compartilhado
-// só com quem a instituição autorizar. Se a variável não estiver
-// configurada, o cadastro de Direção fica bloqueado por padrão — falha
-// segura, em vez de deixar a conta mais sensível do sistema aberta.
-function validarCodigoConvite(codigo) {
-  const codigoEsperado = process.env.CODIGO_CONVITE_DIRECAO;
+// Cadastro de Direção e de Repografia não pode ficar aberto a qualquer
+// um: exige um código de convite (uma variável de ambiente por perfil,
+// ver CONVITE_POR_PERFIL), compartilhado só com quem a instituição
+// autorizar. Se a variável não estiver configurada, o cadastro daquele
+// perfil fica bloqueado por padrão — falha segura, em vez de deixar uma
+// conta sensível do sistema aberta.
+function validarCodigoConvite(perfil, codigo) {
+  const config = CONVITE_POR_PERFIL[perfil];
+  if (!config) return; // perfil sem convite (professor)
+
+  const codigoEsperado = process.env[config.variavel];
   if (!codigoEsperado) {
-    throw erro('Cadastro de Direção está temporariamente indisponível. Contate o suporte da instituição.', 503);
+    throw erro(`Cadastro de ${config.rotulo} está temporariamente indisponível. Contate o suporte da instituição.`, 503);
   }
   if (String(codigo || '').trim() !== codigoEsperado) {
-    throw erro('Código de convite da Direção inválido.', 403);
+    throw erro(`Código de convite da ${config.rotulo} inválido.`, 403);
   }
 }
 
 // Professor(a) precisa lecionar em pelo menos um curso (pode ser vários —
 // é isso que decide em quais bancos de questões a conta consegue
-// adicionar/ver questões). Direção não seleciona curso: enxerga todos.
+// adicionar/ver questões). Direção e Repografia não selecionam curso:
+// enxergam todos (Direção revisa tudo; Repografia só imprime provas já
+// aprovadas, de qualquer curso).
 function normalizarCursos(cursos, perfil) {
-  if (perfil === 'direcao') return [];
+  if (perfil !== 'professor') return [];
 
   const lista = Array.isArray(cursos) ? cursos : [];
   const unicos = [...new Set(lista.map((c) => String(c || '').trim()))].filter(Boolean);
@@ -135,9 +149,7 @@ async function criarUsuario({ nome, email, senha, perfil, instituicao, cargo, cu
   validarEmail(emailLimpo);
   validarSenha(senha);
   validarPerfil(perfil);
-  if (perfil === 'direcao') {
-    validarCodigoConvite(codigoConvite);
-  }
+  validarCodigoConvite(perfil, codigoConvite);
   const cursosValidados = normalizarCursos(cursos, perfil);
 
   const existente = await buscarUsuarioPorEmailBruto(emailLimpo);
