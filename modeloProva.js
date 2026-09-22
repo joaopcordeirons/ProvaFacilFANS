@@ -8,6 +8,12 @@
 // Alternativas: "A) texto", "b. texto", "C - texto".
 const REGEX_ALTERNATIVA = /^\s*([A-Ea-e])\s*[\)\.\-]\s+(.*)$/;
 
+// Negrito marcado pelo professor: **assim**. É o mesmo texto que o botão
+// "Negrito" da tela de edição insere ao redor do trecho selecionado — ver
+// public/app.js (configurarNegrito). PDF e DOCX leem essa marcação com
+// dividirNegrito() pra desenhar o trecho em negrito de verdade.
+const REGEX_NEGRITO = /\*\*(.+?)\*\*/g;
+
 // Cabeçalho de referência da questão, quando o professor cadastrou:
 // "Ano: 2023 Banca: FGV Órgão: TJ-MG Prova: Analista".
 const CAMPOS_REFERENCIA = [
@@ -44,6 +50,33 @@ function formatarPontosDecimal(valor) {
   const numero = Number(valor);
   if (!Number.isFinite(numero)) return null;
   return numero.toFixed(1).replace('.', ',');
+}
+
+/**
+ * Quebra um texto em pedaços { texto, negrito }, interpretando os trechos
+ * marcados com **assim** como negrito. Um texto sem nenhuma marcação volta
+ * como um único pedaço { texto, negrito: false }, então quem consome isso
+ * (provaDocx.js e provaPdf.js) não precisa tratar caso especial.
+ */
+function dividirNegrito(texto) {
+  const bruto = String(texto || '');
+  const partes = [];
+  let ultimoIndice = 0;
+
+  bruto.replace(REGEX_NEGRITO, (correspondencia, conteudo, indice) => {
+    if (indice > ultimoIndice) {
+      partes.push({ texto: bruto.slice(ultimoIndice, indice), negrito: false });
+    }
+    if (conteudo) partes.push({ texto: conteudo, negrito: true });
+    ultimoIndice = indice + correspondencia.length;
+    return correspondencia;
+  });
+
+  if (ultimoIndice < bruto.length) {
+    partes.push({ texto: bruto.slice(ultimoIndice), negrito: false });
+  }
+
+  return partes.length ? partes : [{ texto: bruto, negrito: false }];
 }
 
 /** Separa o texto salvo da questão em enunciado e alternativas. */
@@ -134,10 +167,12 @@ function nomeArquivo(titulo, extensao) {
 
 module.exports = {
   REGEX_ALTERNATIVA,
+  REGEX_NEGRITO,
   ORIENTACOES_PADRAO,
   COR_INSTITUCIONAL,
   formatarPontos,
   formatarPontosDecimal,
+  dividirNegrito,
   separarQuestao,
   referenciaDaQuestao,
   prepararProva,

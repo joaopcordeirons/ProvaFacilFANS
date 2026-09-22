@@ -16,7 +16,7 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 const { lerCoberturaTTF } = require('./coberturaFonte');
 const {
-  prepararProva, formatarPontos, separarQuestao, COR_INSTITUCIONAL,
+  prepararProva, formatarPontos, separarQuestao, COR_INSTITUCIONAL, dividirNegrito,
 } = require('./modeloProva');
 
 // As fontes padrão do PDF (Helvetica etc.) só desenham o WinAnsiEncoding
@@ -141,6 +141,36 @@ function escreverTexto(doc, texto, fontePrincipal, x, y, opcoes) {
     const opcoesSegmento = { ...opcoesFinais, continued: !ultimo || opcoesFinais.continued };
     if (primeiro && posX !== undefined) doc.text(segmento.texto, posX, posY, opcoesSegmento);
     else doc.text(segmento.texto, opcoesSegmento);
+  });
+}
+
+/**
+ * Como escreverTexto, mas interpretando trechos **assim** (marcados pelo
+ * professor no botão "Negrito" da tela de edição) e desenhando-os com
+ * `fonteNegrito` em vez de `fonteNormal`, encadeados na mesma linha.
+ */
+function escreverTextoComNegrito(doc, texto, fonteNormal, fonteNegrito, x, y, opcoes) {
+  let posX = x;
+  let posY = y;
+  let opcoesBase = opcoes;
+  if (typeof posX === 'object' && posX !== null) {
+    opcoesBase = posX;
+    posX = undefined;
+    posY = undefined;
+  }
+  opcoesBase = opcoesBase || {};
+
+  const partes = dividirNegrito(texto);
+  partes.forEach((parte, indice) => {
+    const primeiro = indice === 0;
+    const ultimo = indice === partes.length - 1;
+    const fonte = parte.negrito ? fonteNegrito : fonteNormal;
+    const opcoesParte = { ...opcoesBase, continued: !ultimo || opcoesBase.continued };
+    if (primeiro && posX !== undefined) {
+      escreverTexto(doc, parte.texto, fonte, posX, posY, opcoesParte);
+    } else {
+      escreverTexto(doc, parte.texto, fonte, opcoesParte);
+    }
   });
 }
 
@@ -382,9 +412,8 @@ function desenharQuestao(doc, questao, numero, prova) {
   }
 
   doc.fontSize(10).fillColor(PRETO);
-  escreverTexto(doc, questao.enunciado || '(questão sem enunciado)', FONTE.normal, MARGEM_ESQUERDA, doc.y, {
-    width: largura, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS,
-  });
+  escreverTextoComNegrito(doc, questao.enunciado || '(questão sem enunciado)', FONTE.normal, FONTE.negrito,
+    MARGEM_ESQUERDA, doc.y, { width: largura, align: 'justify', lineGap: ESPACO_ENTRE_LINHAS });
 
   if (questao.alternativas.length) {
     doc.y += 8;
@@ -392,7 +421,8 @@ function desenharQuestao(doc, questao, numero, prova) {
       garantirEspaco(doc, 14);
       doc.font(FONTE.negrito).fontSize(10).fillColor(PRETO)
         .text(`${alternativa.letra}) `, MARGEM_ESQUERDA, doc.y, { continued: true });
-      escreverTexto(doc, alternativa.texto, FONTE.normal, { width: largura, lineGap: ESPACO_ENTRE_LINHAS });
+      escreverTextoComNegrito(doc, alternativa.texto, FONTE.normal, FONTE.negrito,
+        { width: largura, lineGap: ESPACO_ENTRE_LINHAS });
     });
   } else if (prova.linhasResposta > 0) {
     // Dissertativa: espaço pautado para o aluno responder.

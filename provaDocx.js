@@ -14,7 +14,9 @@
 const fs = require('fs');
 const path = require('path');
 const { lerZip, escreverZip } = require('./zipDocx');
-const { prepararProva, formatarPontos, COR_INSTITUCIONAL } = require('./modeloProva');
+const {
+  prepararProva, formatarPontos, COR_INSTITUCIONAL, dividirNegrito,
+} = require('./modeloProva');
 
 const CAMINHO_TEMPLATE = path.join(__dirname, 'assets', 'Template-Avaliacao-FANS.docx');
 
@@ -61,6 +63,15 @@ function escapar(texto) {
 
 function run(texto, rPr = '') {
   return `<w:r><w:rPr>${rPr}<w:rtl w:val="0"/></w:rPr><w:t xml:space="preserve">${escapar(texto)}</w:t></w:r>`;
+}
+
+// Enunciado/alternativas podem ter trechos em **negrito** (marcados pelo
+// professor no botão "Negrito" da tela de edição). Aqui cada trecho vira
+// um <w:r> com a formatação certa, mantendo o resto do texto normal.
+function runsComNegrito(texto, rPrNormal = RPR_TEXTO, rPrNegrito = RPR_TEXTO_NEGRITO) {
+  return dividirNegrito(texto)
+    .map((parte) => run(parte.texto, parte.negrito ? rPrNegrito : rPrNormal))
+    .join('');
 }
 
 function paragrafo(runs, pPr = '', rPrParagrafo = '') {
@@ -187,13 +198,13 @@ function blocoQuestao(questao, numero, prova) {
 
   String(questao.enunciado || '(questão sem enunciado)')
     .split('\n')
-    .forEach((linhaTexto) => partes.push(paragrafo(run(linhaTexto, RPR_TEXTO), PPR_TEXTO, RPR_TEXTO)));
+    .forEach((linhaTexto) => partes.push(paragrafo(runsComNegrito(linhaTexto), PPR_TEXTO, RPR_TEXTO)));
 
   if (questao.alternativas.length) {
     partes.push(paragrafoVazio());
     questao.alternativas.forEach((alternativa) => {
       partes.push(paragrafo(
-        run(`${alternativa.letra}) `, RPR_TEXTO_NEGRITO) + run(alternativa.texto, RPR_TEXTO),
+        run(`${alternativa.letra}) `, RPR_TEXTO_NEGRITO) + runsComNegrito(alternativa.texto),
         PPR_TEXTO,
         RPR_TEXTO,
       ));
