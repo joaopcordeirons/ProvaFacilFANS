@@ -397,6 +397,7 @@
   .botao-negrito:hover { border-color: var(--rule-strong); background: var(--paper); }
   .botao-negrito strong { font-weight: 700; }
   .dica-negrito { font-size: 0.78rem; color: var(--ink-muted); }
+  .dica-negrito.erro { color: var(--claret); font-weight: 600; }
   .status-inline { margin-top: 0.55rem; font-size: 0.8rem; color: var(--ink-muted); }
   .status-inline.erro { color: var(--claret); }
   .oculto { display: none !important; }

@@ -105,7 +105,7 @@ function barraNegritoHtml() {
       <button type="button" class="botao-negrito" aria-label="Deixar em negrito o texto selecionado no campo abaixo">
         <strong>Negrito</strong>
       </button>
-      <span class="dica-negrito">Selecione um trecho do texto abaixo e clique aqui para deixá-lo em negrito.</span>
+      <span class="dica-negrito" aria-live="polite">Selecione um trecho do texto abaixo e clique aqui para deixá-lo em negrito.</span>
     </div>
   `;
 }
@@ -170,7 +170,9 @@ function travarCampo(elemento) {
 }
 
 // Liga o botão "Negrito" a um campo contenteditable: aplica o negrito de
-// verdade (document.execCommand) só no trecho selecionado.
+// verdade (document.execCommand) só no trecho selecionado. O aviso de
+// "selecione primeiro" aparece escrito ao lado do botão (sem popup), e
+// volta sozinho pro texto normal depois de alguns segundos.
 function configurarNegrito(campo, botao) {
   if (!campo || !botao) return;
 
@@ -178,14 +180,34 @@ function configurarNegrito(campo, botao) {
   // pra obterTextoComMarcadores não precisar adivinhar todo tipo de CSS.
   try { document.execCommand('styleWithCSS', false, false); } catch (erro) { /* navegador antigo, ignora */ }
 
+  const dicaEl = botao.parentElement ? botao.parentElement.querySelector('.dica-negrito') : null;
+  const textoDicaPadrao = dicaEl ? dicaEl.textContent : '';
+  let temporizadorAviso = null;
+
+  function avisarSelecioneAntes() {
+    if (!dicaEl) return;
+    clearTimeout(temporizadorAviso);
+    dicaEl.textContent = 'Primeiro selecione o trecho do texto que deve ficar em negrito.';
+    dicaEl.classList.add('erro');
+    temporizadorAviso = setTimeout(() => {
+      dicaEl.textContent = textoDicaPadrao;
+      dicaEl.classList.remove('erro');
+    }, 4000);
+  }
+
   // Evita que o clique no botão tire o foco/seleção do campo antes do
   // clique ser processado — essencial em contenteditable.
   botao.addEventListener('mousedown', (evento) => evento.preventDefault());
   botao.addEventListener('click', () => {
     const selecao = window.getSelection();
     if (!selecao || selecao.rangeCount === 0 || selecao.isCollapsed || !campo.contains(selecao.anchorNode)) {
-      window.alert('Primeiro selecione (destacando com o mouse ou o teclado) o trecho do texto que deve ficar em negrito.');
+      avisarSelecioneAntes();
       return;
+    }
+    if (dicaEl && dicaEl.classList.contains('erro')) {
+      clearTimeout(temporizadorAviso);
+      dicaEl.textContent = textoDicaPadrao;
+      dicaEl.classList.remove('erro');
     }
     campo.focus();
     document.execCommand('bold');
