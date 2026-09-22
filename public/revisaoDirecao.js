@@ -9,7 +9,7 @@
 (function () {
   const {
     escapeHtml, formatarPontos, textoLimpo, resumir, rotuloPeriodo,
-    questaoPorId, pedirJson, pedirPdf,
+    questaoPorId, pedirJson, pedirPdf, ligarBotaoEnviarEmail,
   } = window.App;
 
   const STATUS_ROTULO = {
@@ -85,6 +85,9 @@
     overlayEl.classList.add('oculto');
     limparPrevia();
     provaAtual = null;
+    document.getElementById('areaEnviarEmailDirecao').innerHTML = '';
+    document.getElementById('statusEnvioEmailDirecao').textContent = '';
+    document.getElementById('btnEnviarEmailDirecao').disabled = false;
   }
 
   function questoesDaProva(prova) {
@@ -199,6 +202,16 @@
   btnAprovar.addEventListener('click', () => enviarDecisao('aprovada'));
   btnReprovar.addEventListener('click', () => enviarDecisao('reprovada'));
   btnAnalise.addEventListener('click', () => enviarDecisao('em_revisao'));
+
+  // Fica fora das abas de propósito: a Direção pode querer encaminhar a
+  // prova por e-mail em qualquer momento da revisão, independente do
+  // resultado (aprovada, reprovada ou ainda em análise).
+  ligarBotaoEnviarEmail(
+    document.getElementById('btnEnviarEmailDirecao'),
+    document.getElementById('areaEnviarEmailDirecao'),
+    document.getElementById('statusEnvioEmailDirecao'),
+    () => provaAtual,
+  );
 
   window.RevisaoDirecao = { abrir };
 })();

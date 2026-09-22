@@ -10,7 +10,7 @@
     Estado, API_BASE, escapeHtml, formatarPontos, textoLimpo, resumir,
     rotuloPeriodo, estaSelecionada, alternarSelecao, salvarSelecao,
     questaoPorId, questoesSelecionadas, pontuacaoSelecionada, mostrarView,
-    EstadoUsuario, cursosDoUsuario, opcoesCurso, opcoesPeriodo,
+    EstadoUsuario, cursosDoUsuario, opcoesCurso, opcoesPeriodo, ligarBotaoEnviarEmail,
   } = window.App;
 
   const PONTUACAO_ALVO = 10;
@@ -619,6 +619,17 @@
   document.getElementById('btnVoltarMontagem').addEventListener('click', () => mostrarView('montar'));
   document.getElementById('btnGerarPdf').addEventListener('click', () => gerarProva('pdf'));
   document.getElementById('btnGerarDocx').addEventListener('click', () => gerarProva('docx'));
+
+  // "Enviar por e-mail" funciona pra prova em qualquer status — de
+  // rascunho a aprovada — desde que ela já tenha sido salva ou gerada ao
+  // menos uma vez (Estado.provaAtualId). É só compartilhar o arquivo, não
+  // muda nada no fluxo de revisão.
+  ligarBotaoEnviarEmail(
+    document.getElementById('btnEnviarEmailRevisao'),
+    document.getElementById('areaEnviarEmailRevisao'),
+    document.getElementById('statusEnvioEmailRevisao'),
+    () => (Estado.provaAtualId ? { id: Estado.provaAtualId } : null),
+  );
   btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
   btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
   btnDuplicarProvaEl.addEventListener('click', duplicarProva);
@@ -652,6 +663,11 @@
     idsParaRemoverEmLote.clear();
     statusEnvioEl.textContent = '';
     statusEnvioEl.className = 'status';
+    // A mensagem e o formulário de "Enviar por e-mail" também não devem
+    // vazar de uma prova pra outra.
+    document.getElementById('areaEnviarEmailRevisao').innerHTML = '';
+    document.getElementById('statusEnvioEmailRevisao').textContent = '';
+    document.getElementById('btnEnviarEmailRevisao').disabled = false;
     // Prova já enviada não tem o que editar: o que interessa é vê-la como
     // ficou. Rascunho e prova nova abrem na lista de questões.
     limparPrevia('');

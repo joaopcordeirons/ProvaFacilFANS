@@ -317,6 +317,106 @@ async function pedirPdf(caminho, opcoes) {
   return resposta.blob();
 }
 
+/* --------------------------------------------------- envio de prova por e-mail */
+
+// Monta o formulário inline de "Enviar por e-mail" dentro de `container`.
+// Usado pelas telas de revisão (Passo 3 do professor e Revisão da Direção) —
+// funciona pra prova em qualquer status, de rascunho a aprovada/reprovada,
+// já que enviar o arquivo não muda nada no fluxo de decisão.
+function montarFormularioEmail(container, prova, { aoCancelar, aoSucesso, aoErro, classeExtra = '' } = {}) {
+  container.innerHTML = `
+    <form class="form-enviar-email ${classeExtra}">
+      <input type="text" class="campo-destinatarios" placeholder="e-mail@exemplo.com, outro@exemplo.com" required>
+      <select class="campo-formato-email">
+        <option value="pdf">PDF</option>
+        <option value="docx">DOCX</option>
+      </select>
+      <input type="text" class="campo-mensagem-email" placeholder="Mensagem (opcional)">
+      <button type="submit">Enviar</button>
+      <button type="button" class="cancelar-envio-email">Cancelar</button>
+    </form>
+  `;
+
+  container.querySelector('.campo-destinatarios').focus();
+
+  container.querySelector('.cancelar-envio-email').addEventListener('click', (evento) => {
+    evento.stopPropagation();
+    aoCancelar?.();
+  });
+
+  const formulario = container.querySelector('.form-enviar-email');
+  formulario.addEventListener('click', (evento) => evento.stopPropagation());
+  formulario.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    const destinatarios = container.querySelector('.campo-destinatarios').value
+      .split(/[,;\s]+/)
+      .map((email) => email.trim())
+      .filter(Boolean);
+    if (!destinatarios.length) return;
+
+    const botaoEnviar = formulario.querySelector('button[type="submit"]');
+    botaoEnviar.disabled = true;
+    formulario.querySelector('.cancelar-envio-email').disabled = true;
+    botaoEnviar.textContent = 'Enviando...';
+    try {
+      await pedirJson(`/api/provas/${encodeURIComponent(prova.id)}/enviar-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destinatarios,
+          formato: container.querySelector('.campo-formato-email').value,
+          mensagem: container.querySelector('.campo-mensagem-email').value,
+        }),
+      });
+      aoSucesso?.();
+    } catch (err) {
+      botaoEnviar.disabled = false;
+      formulario.querySelector('.cancelar-envio-email').disabled = false;
+      botaoEnviar.textContent = 'Enviar';
+      aoErro?.(err);
+    }
+  });
+}
+
+// Liga um botão "Enviar por e-mail" fixo da tela a uma área onde o
+// formulário abre/fecha — usado no Passo 3 (revisão do professor) e no
+// drawer de Revisão da Direção. `obterProva` devolve `{ id, titulo }` da
+// prova atual, ou algo "falsy" se ela ainda não existir no servidor.
+function ligarBotaoEnviarEmail(botaoEl, areaFormEl, statusEl, obterProva) {
+  botaoEl.addEventListener('click', () => {
+    if (areaFormEl.querySelector('.form-enviar-email')) return; // já está aberto
+
+    const prova = obterProva();
+    if (!prova || !prova.id) {
+      statusEl.textContent = 'Salve ou gere a prova antes de enviar por e-mail.';
+      statusEl.className = 'status erro';
+      return;
+    }
+
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+    botaoEl.disabled = true;
+
+    montarFormularioEmail(areaFormEl, prova, {
+      classeExtra: 'largo',
+      aoCancelar: () => {
+        areaFormEl.innerHTML = '';
+        botaoEl.disabled = false;
+      },
+      aoSucesso: () => {
+        areaFormEl.innerHTML = '';
+        botaoEl.disabled = false;
+        statusEl.textContent = 'Prova enviada por e-mail.';
+        statusEl.className = 'status ok';
+      },
+      aoErro: (err) => {
+        statusEl.textContent = err.message;
+        statusEl.className = 'status erro';
+      },
+    });
+  });
+}
+
 /* ---------------------------------------------------------------- navegação */
 
 const VIEWS = {
@@ -1528,6 +1628,7 @@ window.App = {
   pontuacaoSelecionada,
   pedirJson,
   pedirPdf,
+  ligarBotaoEnviarEmail,
   mostrarView,
   carregarQuestoes,
   renderizarBanco,

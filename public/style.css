@@ -883,6 +883,21 @@
     border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-muted);
     border-radius: 5px; padding: 0.32rem 0.7rem; font-size: 0.76rem; cursor: pointer; font-family: var(--sans);
   }
+  /* Variante empilhada do formulário de e-mail, usada fora da tabela de
+     provas — Passo 3 (revisão do professor) e drawer da Direção, onde a
+     coluna é estreita demais pra o layout em linha. */
+  .form-enviar-email.largo {
+    display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+    margin-top: 0.6rem;
+  }
+  .form-enviar-email.largo .campo-destinatarios,
+  .form-enviar-email.largo .campo-mensagem-email,
+  .form-enviar-email.largo select,
+  .form-enviar-email.largo button {
+    width: 100%; flex-basis: auto; min-width: 0;
+  }
+  .acoes-drawer-revisao { padding: 0 1.6rem 1.1rem; flex-shrink: 0; }
+  .acoes-drawer-revisao .status { margin-top: 0.5rem; }
 
   /* Status como rótulo fixo — ninguém edita por aqui (nem professor, nem
      Direção); a decisão é sempre tomada na tela de Revisão. Feito pra

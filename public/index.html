@@ -240,6 +240,12 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
           <button type="button" class="btn-secundario largo" id="btnGerarDocx">Gerar DOCX (editável no Word)</button>
           <div class="status" id="statusPdf"></div>
           <a class="link-download oculto" id="linkPdf" download>Baixar o arquivo novamente</a>
+
+          <div class="separador-acoes">ou envie por e-mail</div>
+
+          <button type="button" class="btn-secundario largo" id="btnEnviarEmailRevisao">Enviar por e-mail</button>
+          <div id="areaEnviarEmailRevisao"></div>
+          <div class="status" id="statusEnvioEmailRevisao"></div>
         </aside>
       </div>
 
@@ -484,6 +490,12 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         <button type="button" class="fechar-drawer" id="btnFecharDrawerRevisao" aria-label="Fechar">
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1 1l11 11M12 1L1 12"/></svg>
         </button>
+      </div>
+
+      <div class="acoes-drawer-revisao">
+        <button type="button" class="btn-secundario" id="btnEnviarEmailDirecao">Enviar por e-mail</button>
+        <div id="areaEnviarEmailDirecao"></div>
+        <div class="status" id="statusEnvioEmailDirecao"></div>
       </div>
 
       <div class="abas-prova abas-drawer" role="tablist">
