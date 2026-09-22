@@ -1275,7 +1275,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
     // gabarito em branco pra preencher; ao marcar "dissertativa" havendo
     // alternativas escritas, confirma antes de apagá-las do texto (pra
     // não sumir com conteúdo sem querer).
-    selectTipoEl.addEventListener('change', () => {
+    selectTipoEl.addEventListener('change', async () => {
       const linhas = lerTextoDoCampo(textareaEl).split('\n');
       const temAlternativas = linhas.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
 
@@ -1283,7 +1283,12 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
         const textoAtual = lerTextoDoCampo(textareaEl).replace(/\n+$/, '');
         escreverTextoNoCampo(textareaEl, `${textoAtual}\n\nA) \nB) \nC) \nD) `);
       } else if (selectTipoEl.value === 'dissertativa' && temAlternativas) {
-        const podeRemover = window.confirm('Remover as alternativas (A, B, C...) do texto desta questão?');
+        const podeRemover = await confirmarAcao({
+          titulo: 'Remover alternativas',
+          mensagem: 'Remover as alternativas (A, B, C...) do texto desta questão?',
+          textoConfirmar: 'Remover',
+          perigo: true,
+        });
         if (podeRemover) {
           const semAlternativas = linhas
             .filter((linha) => !REGEX_LINHA_ALTERNATIVA.test(linha.trim()))
@@ -1572,9 +1577,12 @@ btnVerificarEmail.addEventListener('click', async () => {
           item.remove();
           return;
         }
-        const confirmou = window.confirm(
-          'Isso remove o e-mail da tela e também o exclui da caixa de entrada (ele vai para a Lixeira do Gmail). Deseja continuar?'
-        );
+        const confirmou = await confirmarAcao({
+          titulo: 'Remover e-mail',
+          mensagem: 'Isso remove o e-mail da tela e também o exclui da caixa de entrada (ele vai para a Lixeira do Gmail). Deseja continuar?',
+          textoConfirmar: 'Remover',
+          perigo: true,
+        });
         if (!confirmou) return;
 
         const botao = evento.target;

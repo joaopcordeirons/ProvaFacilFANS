@@ -114,7 +114,7 @@
       EstadoUsuario.atual = usuario;
     } catch (err) {
       evento.target.checked = !evento.target.checked; // reverte em caso de falha
-      alert(err.message);
+      await avisar({ titulo: 'Não foi possível salvar', mensagem: err.message });
     }
   });
 
