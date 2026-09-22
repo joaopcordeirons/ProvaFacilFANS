@@ -13,7 +13,7 @@ const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./ext
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
-const { buscarEmailsPorRemetente, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
+const { buscarEmailsPorRemetente, excluirEmailPorUid, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
 const {
   criarQuestao,
   listarQuestoes,
@@ -943,6 +943,32 @@ app.post('/api/questoes/verificar-email', async (req, res) => {
   } catch (err) {
     console.error('Erro ao verificar e-mails:', err.message);
     return res.status(500).json({ erro: 'Falha ao verificar e-mails.', detalhe: err.message });
+  }
+});
+
+// Exclui de verdade um e-mail da caixa (botão "Remover da tela"): move a
+// mensagem pra Lixeira do Gmail, pra ela não voltar a aparecer numa
+// próxima busca.
+app.post('/api/questoes/excluir-email', express.json({ limit: '1kb' }), async (req, res) => {
+  if (!credenciaisConfiguradas()) {
+    return res.status(500).json({
+      erro: 'GMAIL_USER e GMAIL_APP_PASSWORD não configurados no .env do servidor.',
+    });
+  }
+  const uid = Number(req.body?.uid);
+  if (!uid) {
+    return res.status(400).json({ erro: 'UID do e-mail não informado.' });
+  }
+  if (!req.usuario.email) {
+    return res.status(400).json({ erro: 'Seu cadastro não tem e-mail definido.' });
+  }
+
+  try {
+    await excluirEmailPorUid(uid, req.usuario.email);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao excluir e-mail:', err.message);
+    return res.status(500).json({ erro: 'Falha ao excluir o e-mail.', detalhe: err.message });
   }
 });
 

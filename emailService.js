@@ -76,13 +76,13 @@ async function buscarEmailsPorRemetente(emailRemetente, limite = 30) {
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      const uids = await client.search({ from: emailRemetente });
+      const uids = await client.search({ from: emailRemetente }, { uid: true });
       // Mais recentes primeiro, limitado pra não reprocessar a caixa toda
       // a cada clique.
       const uidsRecentes = uids.slice(-limite).reverse();
 
       for (const uid of uidsRecentes) {
-        const mensagem = await client.fetchOne(uid, { source: true });
+        const mensagem = await client.fetchOne(uid, { source: true }, { uid: true });
         const parseado = await simpleParser(mensagem.source);
 
         const anexosRelevantes = (parseado.attachments || []).filter(
@@ -96,6 +96,7 @@ async function buscarEmailsPorRemetente(emailRemetente, limite = 30) {
 
         emailsProcessados.push({
           messageId: parseado.messageId || `uid-${uid}`,
+          uid,
           de: parseado.from?.text || null,
           assunto: parseado.subject || null,
           data: parseado.date || null,
@@ -111,6 +112,56 @@ async function buscarEmailsPorRemetente(emailRemetente, limite = 30) {
   }
 
   return emailsProcessados;
+}
+
+// Remove de verdade um e-mail da caixa (usado pelo botão "Remover da
+// tela"): move a mensagem para a Lixeira do Gmail, em vez de só tirá-la
+// da INBOX (o que no Gmail apenas arquiva a mensagem em vez de excluí-la).
+// Assim ela some da tela e não volta a aparecer numa próxima busca.
+// Antes de mover, confirma que o e-mail é mesmo do remetente informado —
+// evita que um professor exclua, por engano ou não, um e-mail de outro
+// professor na mesma caixa compartilhada.
+async function excluirEmailPorUid(uid, emailRemetente) {
+  if (!credenciaisConfiguradas()) {
+    throw new Error(
+      'Credenciais do Gmail não configuradas. Defina GMAIL_USER e GMAIL_APP_PASSWORD no .env.'
+    );
+  }
+  if (!uid) {
+    throw new Error('UID do e-mail não informado.');
+  }
+  if (!emailRemetente) {
+    throw new Error('E-mail do professor não encontrado no cadastro.');
+  }
+
+  const client = new ImapFlow({
+    host: 'imap.gmail.com',
+    port: 993,
+    secure: true,
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+    logger: false,
+  });
+
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const mensagem = await client.fetchOne(uid, { envelope: true }, { uid: true });
+      const remetenteDaMensagem = (mensagem?.envelope?.from || [])
+        .map((endereco) => (endereco.address || '').toLowerCase());
+      if (!mensagem || !remetenteDaMensagem.includes(emailRemetente.toLowerCase())) {
+        throw new Error('Esse e-mail não pertence ao seu cadastro.');
+      }
+      await client.messageMove(uid, '[Gmail]/Trash', { uid: true });
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout();
+  }
 }
 
 /* ------------------------------------------------- envio: recuperação de senha */
@@ -177,4 +228,10 @@ async function enviarEmailVerificacao(destino, nome, link) {
   return { enviado: true };
 }
 
-module.exports = { buscarEmailsPorRemetente, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao };
+module.exports = {
+  buscarEmailsPorRemetente,
+  excluirEmailPorUid,
+  credenciaisConfiguradas,
+  enviarEmailRecuperacao,
+  enviarEmailVerificacao,
+};

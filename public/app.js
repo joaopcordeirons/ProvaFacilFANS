@@ -1363,7 +1363,7 @@ btnVerificarEmail.addEventListener('click', async () => {
             ${escapeHtml(anexo.nomeArquivo || 'anexo')}
             ${anexo.jaSalvo ? '<span class="badge-processado">já salvo</span>' : ''}
           </div>
-          <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || '').slice(0, 500))}</div>
+          <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || ''))}</div>
           ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-anexo="${indice}">${anexo.jaSalvo ? 'Processar de novo' : 'Identificar questões do anexo'}</button>` : ''}
         </div>
       `).join('');
@@ -1378,7 +1378,7 @@ btnVerificarEmail.addEventListener('click', async () => {
         <div class="remetente">${escapeHtml(email.de || '')}${email.data ? ' · ' + new Date(email.data).toLocaleDateString('pt-BR') : ''}</div>
         <div class="corpo">${escapeHtml(email.textoCorpo || '(corpo vazio)')}</div>
         ${email.textoCorpo ? `<button class="salvar salvar-email-corpo">${email.corpoJaSalvo ? 'Processar de novo' : 'Identificar questões do corpo'}</button>` : ''}
-        <button class="excluir remover-email">Remover da tela</button>
+        <button class="excluir remover-email" title="Também exclui o e-mail da caixa de entrada (vai para a Lixeira do Gmail)">Remover da tela</button>
         ${anexosHtml}
         <div class="status status-email-item"></div>
         <div class="candidatas-email"></div>
@@ -1388,7 +1388,32 @@ btnVerificarEmail.addEventListener('click', async () => {
       const containerCandidatas = item.querySelector('.candidatas-email');
       const statusItemEl = item.querySelector('.status-email-item');
 
-      item.querySelector('.remover-email').addEventListener('click', () => item.remove());
+      item.querySelector('.remover-email').addEventListener('click', async (evento) => {
+        if (!email.uid) {
+          item.remove();
+          return;
+        }
+        const confirmou = window.confirm(
+          'Isso remove o e-mail da tela e também o exclui da caixa de entrada (ele vai para a Lixeira do Gmail). Deseja continuar?'
+        );
+        if (!confirmou) return;
+
+        const botao = evento.target;
+        botao.disabled = true;
+        botao.textContent = 'Removendo...';
+        try {
+          await pedirJson('/api/questoes/excluir-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: email.uid }),
+          });
+          item.remove();
+        } catch (err) {
+          botao.disabled = false;
+          botao.textContent = 'Remover da tela';
+          mostrarErroNoCard(botao, err.message);
+        }
+      });
       item.querySelector('.salvar-email-corpo')?.addEventListener('click', async (evento) => {
         evento.target.disabled = true;
         try {

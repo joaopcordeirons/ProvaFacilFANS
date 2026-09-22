@@ -411,7 +411,7 @@
   }
   .email-item .assunto { font-weight: 600; margin-bottom: 0.15rem; }
   .email-item .remetente { color: var(--ink-muted); font-size: 0.78rem; margin-bottom: 0.5rem; font-family: var(--mono); }
-  .email-item .corpo { white-space: pre-wrap; margin-bottom: 0.5rem; }
+  .email-item .corpo { white-space: pre-wrap; margin-bottom: 0.5rem; max-height: 260px; overflow-y: auto; }
   .email-item .anexo { border-top: 1px dashed var(--rule); padding-top: 0.5rem; margin-top: 0.5rem; }
   .email-item .anexo-nome { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-muted); display: flex; align-items: center; gap: 0.4rem; }
   .badge-processado {
