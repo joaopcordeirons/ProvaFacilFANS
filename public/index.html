@@ -459,8 +459,13 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         <!-- Aba: E-mail -->
         <div class="drawer-painel oculto" data-painel="email">
           <div class="panel">
-            <p class="subtitle">Busca questões recebidas por e-mail — corpo e anexos em PDF, DOCX ou imagem — e marca como lidas.</p>
-            <button class="enviar" id="btnVerificarEmail">Verificar agora</button>
+            <p class="subtitle">Busca, no histórico do sistema, e-mails enviados do seu endereço cadastrado — corpo e anexos em PDF, DOCX ou imagem. O que você já salvou fica marcado como "já salvo".</p>
+            <div class="instrucao-email">
+              Envie as questões (no corpo do e-mail ou em anexo) do seu e-mail cadastrado para
+              <code id="enderecoEmailSistema">fansprovas@gmail.com</code>
+              <button type="button" class="copiar-endereco-email" id="btnCopiarEnderecoEmail">Copiar</button>
+            </div>
+            <button class="enviar" id="btnVerificarEmail">Buscar meus e-mails</button>
             <div class="status" id="statusEmail"></div>
             <div id="listaEmails"></div>
           </div>

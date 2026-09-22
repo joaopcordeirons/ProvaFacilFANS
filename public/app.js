@@ -1071,7 +1071,7 @@ async function salvarQuestaoNoFirebase(dados) {
 // sem custo) e desenha um card editável para cada questão encontrada, já
 // sem cabeçalho/instruções/rodapé. O professor confere, classifica
 // (assunto, período e valor em pontos) e salva cada uma individualmente.
-async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquivo, containerEl, statusAlvoEl) {
+async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquivo, containerEl, statusAlvoEl, emailMeta = null) {
   containerEl.innerHTML = '';
   if (!textoBruto.trim()) {
     statusAlvoEl.textContent = '';
@@ -1265,6 +1265,8 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
           periodo: item.querySelector('.campo-periodo').value,
           ano: item.querySelector('.campo-ano').value,
           curso: item.querySelector('.campo-curso')?.value || cursosDoUsuario()[0],
+          emailMessageId: emailMeta?.messageId || null,
+          emailFonte: emailMeta?.fonte || null,
         });
         item.classList.add('salva');
         avisoEl.className = 'status-inline';
@@ -1316,6 +1318,18 @@ const btnVerificarEmail = document.getElementById('btnVerificarEmail');
 const statusEmailEl = document.getElementById('statusEmail');
 const listaEmailsEl = document.getElementById('listaEmails');
 
+const btnCopiarEnderecoEmail = document.getElementById('btnCopiarEnderecoEmail');
+btnCopiarEnderecoEmail?.addEventListener('click', async () => {
+  const endereco = document.getElementById('enderecoEmailSistema').textContent;
+  try {
+    await navigator.clipboard.writeText(endereco);
+  } catch (_) {
+    // Sem permissão de clipboard (ex.: contexto não seguro) — usuário copia manualmente.
+  }
+  btnCopiarEnderecoEmail.textContent = 'Copiado';
+  setTimeout(() => (btnCopiarEnderecoEmail.textContent = 'Copiar'), 1500);
+});
+
 function mostrarErroNoCard(elemento, mensagem) {
   const card = elemento.closest('.email-item');
   if (!card) return;
@@ -1330,32 +1344,40 @@ function mostrarErroNoCard(elemento, mensagem) {
 
 btnVerificarEmail.addEventListener('click', async () => {
   btnVerificarEmail.disabled = true;
-  statusEmailEl.textContent = 'Verificando caixa de entrada...';
+  statusEmailEl.textContent = 'Buscando e-mails enviados por você...';
   statusEmailEl.className = 'status';
   listaEmailsEl.innerHTML = '';
 
   try {
     const dados = await pedirJson('/api/questoes/verificar-email', { method: 'POST' });
 
-    statusEmailEl.textContent = `${dados.quantidade} e-mail(s) novo(s) processado(s).`;
+    statusEmailEl.textContent = dados.quantidade === 0
+      ? 'Nenhum e-mail seu encontrado na caixa de entrada do sistema.'
+      : `${dados.quantidade} e-mail(s) seu(s) encontrado(s).`;
     statusEmailEl.className = 'status ok';
 
     dados.emails.forEach((email) => {
       const anexosHtml = (email.anexos || []).map((anexo, indice) => `
         <div class="anexo">
-          <div class="anexo-nome">${escapeHtml(anexo.nomeArquivo || 'anexo')}</div>
+          <div class="anexo-nome">
+            ${escapeHtml(anexo.nomeArquivo || 'anexo')}
+            ${anexo.jaSalvo ? '<span class="badge-processado">já salvo</span>' : ''}
+          </div>
           <div class="corpo">${escapeHtml(anexo.erro ? 'Erro: ' + anexo.erro : (anexo.texto || '').slice(0, 500))}</div>
-          ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-anexo="${indice}">Identificar questões do anexo</button>` : ''}
+          ${anexo.texto ? `<button class="salvar salvar-email-anexo" data-anexo="${indice}">${anexo.jaSalvo ? 'Processar de novo' : 'Identificar questões do anexo'}</button>` : ''}
         </div>
       `).join('');
 
       const item = document.createElement('div');
       item.className = 'email-item';
       item.innerHTML = `
-        <div class="assunto">${escapeHtml(email.assunto || '(sem assunto)')}</div>
-        <div class="remetente">${escapeHtml(email.de || '')}</div>
+        <div class="assunto">
+          ${escapeHtml(email.assunto || '(sem assunto)')}
+          ${email.corpoJaSalvo ? '<span class="badge-processado">corpo já salvo</span>' : ''}
+        </div>
+        <div class="remetente">${escapeHtml(email.de || '')}${email.data ? ' · ' + new Date(email.data).toLocaleDateString('pt-BR') : ''}</div>
         <div class="corpo">${escapeHtml(email.textoCorpo || '(corpo vazio)')}</div>
-        ${email.textoCorpo ? '<button class="salvar salvar-email-corpo">Identificar questões do corpo</button>' : ''}
+        ${email.textoCorpo ? `<button class="salvar salvar-email-corpo">${email.corpoJaSalvo ? 'Processar de novo' : 'Identificar questões do corpo'}</button>` : ''}
         <button class="excluir remover-email">Remover da tela</button>
         ${anexosHtml}
         <div class="status status-email-item"></div>
@@ -1372,6 +1394,7 @@ btnVerificarEmail.addEventListener('click', async () => {
         try {
           await identificarErenderizarQuestoes(
             email.textoCorpo, 'email', email.assunto || 'email', containerCandidatas, statusItemEl,
+            { messageId: email.messageId, fonte: 'corpo' },
           );
         } catch (err) {
           mostrarErroNoCard(evento.target, err.message);
@@ -1386,6 +1409,7 @@ btnVerificarEmail.addEventListener('click', async () => {
           await identificarErenderizarQuestoes(
             anexo.texto, anexo.tipo || 'email-anexo', anexo.nomeArquivo || 'anexo',
             containerCandidatas, statusItemEl,
+            { messageId: email.messageId, fonte: anexo.nomeArquivo || 'anexo' },
           );
         } catch (err) {
           mostrarErroNoCard(evento.target, err.message);

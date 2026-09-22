@@ -413,7 +413,52 @@
   .email-item .remetente { color: var(--ink-muted); font-size: 0.78rem; margin-bottom: 0.5rem; font-family: var(--mono); }
   .email-item .corpo { white-space: pre-wrap; margin-bottom: 0.5rem; }
   .email-item .anexo { border-top: 1px dashed var(--rule); padding-top: 0.5rem; margin-top: 0.5rem; }
-  .email-item .anexo-nome { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-muted); }
+  .email-item .anexo-nome { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-muted); display: flex; align-items: center; gap: 0.4rem; }
+  .badge-processado {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--moss);
+    background: var(--moss-soft);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .instrucao-email {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.83rem;
+    color: var(--ink);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.65rem 0.8rem;
+    margin-bottom: 0.75rem;
+  }
+  .instrucao-email code {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+  }
+  .instrucao-email .copiar-endereco-email {
+    font-family: var(--sans);
+    font-size: 0.75rem;
+    color: var(--accent);
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    cursor: pointer;
+  }
+  .instrucao-email .copiar-endereco-email:hover { background: var(--accent-soft); }
 
   .questao-candidata {
     border: 1px solid var(--rule);

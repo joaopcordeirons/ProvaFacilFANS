@@ -13,10 +13,11 @@ const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./ext
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
-const { verificarNovosEmails, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
+const { buscarEmailsPorRemetente, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao } = require('./emailService');
 const {
   criarQuestao,
   listarQuestoes,
+  buscarMessageIdsProcessados,
   atualizarQuestao,
   excluirQuestao,
   buscarQuestaoPorId,
@@ -375,7 +376,7 @@ app.post('/api/questoes', express.json(), async (req, res) => {
   try {
     const {
       texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
-      assunto, periodo, ano, valor, curso,
+      assunto, periodo, ano, valor, curso, emailMessageId, emailFonte,
     } = req.body || {};
     if (typeof texto !== 'string' || !texto.trim()) {
       return res.status(400).json({ erro: 'O campo "texto" é obrigatório.' });
@@ -387,6 +388,7 @@ app.post('/api/questoes', express.json(), async (req, res) => {
     const questao = await criarQuestao({
       texto: texto.trim(), conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
       assunto, periodo, ano, valor, curso, criadoPorId: req.usuarioId,
+      emailMessageId, emailFonte,
     });
     return res.status(201).json(questao);
   } catch (err) {
@@ -907,20 +909,37 @@ app.post('/api/questoes/extrair-imagem', uploadImagem.single('arquivo'), async (
   }
 });
 
-// Conecta na caixa do Gmail, processa e-mails não lidos e retorna o que
-// foi extraído de cada um (corpo do texto + anexos PDF/DOCX). Cada e-mail
-// processado é marcado como lido, então chamar de novo só traz o que
-// chegou depois da última verificação.
+// Busca no histórico da caixa do Gmail (não só não lidos) todo e-mail
+// vindo do endereço cadastrado do professor logado, e retorna o que foi
+// extraído de cada um (corpo do texto + anexos PDF/DOCX/imagem). Cada
+// e-mail/anexo já usado numa questão salva anteriormente por esse
+// professor vem marcado com jaSalva:true, pra não duplicar sem esconder
+// o histórico.
 app.post('/api/questoes/verificar-email', async (req, res) => {
   if (!credenciaisConfiguradas()) {
     return res.status(500).json({
       erro: 'GMAIL_USER e GMAIL_APP_PASSWORD não configurados no .env do servidor.',
     });
   }
+  if (!req.usuario.email) {
+    return res.status(400).json({ erro: 'Seu cadastro não tem e-mail definido.' });
+  }
 
   try {
-    const emails = await verificarNovosEmails();
-    return res.json({ quantidade: emails.length, emails });
+    const emails = await buscarEmailsPorRemetente(req.usuario.email);
+    const messageIds = emails.map((e) => e.messageId);
+    const processados = await buscarMessageIdsProcessados(req.usuarioId, messageIds);
+
+    const emailsComStatus = emails.map((email) => ({
+      ...email,
+      corpoJaSalvo: processados.has(`${email.messageId}::corpo`),
+      anexos: (email.anexos || []).map((anexo) => ({
+        ...anexo,
+        jaSalvo: processados.has(`${email.messageId}::${anexo.nomeArquivo}`),
+      })),
+    }));
+
+    return res.json({ quantidade: emailsComStatus.length, emails: emailsComStatus });
   } catch (err) {
     console.error('Erro ao verificar e-mails:', err.message);
     return res.status(500).json({ erro: 'Falha ao verificar e-mails.', detalhe: err.message });

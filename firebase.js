@@ -113,6 +113,12 @@ async function criarQuestao(dados) {
     criadoPorId: dados.criadoPorId || null,
     tipoOrigem: dados.tipoOrigem || 'manual',
     nomeArquivo: dados.nomeArquivo || null,
+    // Só preenchido quando a questão veio da aba E-mail: identifica de
+    // qual mensagem (emailMessageId) e de qual parte dela (emailFonte:
+    // 'corpo' ou o nome do anexo) ela foi extraída, pra podermos marcar
+    // como "já processado" numa busca futura e evitar duplicar.
+    emailMessageId: dados.emailMessageId || null,
+    emailFonte: dados.emailFonte || null,
     paginas: Number.isFinite(dados.paginas) ? dados.paginas : null,
     confianca: Number.isFinite(dados.confianca) ? dados.confianca : null,
     avisos: Array.isArray(dados.avisos) ? dados.avisos : [],
@@ -151,6 +157,33 @@ async function listarQuestoes(limite = 50, cursosFiltro = null) {
     .map(formatarQuestao)
     .sort((a, b) => new Date(b.criadoEm || 0) - new Date(a.criadoEm || 0))
     .slice(0, limite);
+}
+
+// Dado um professor e uma lista de messageIds vindos de uma busca no
+// e-mail, devolve o conjunto de chaves "messageId::fonte" que esse
+// professor já salvou como questão — usado pra marcar na tela o que já
+// foi aproveitado, sem esconder o e-mail (ele pode ter mais de uma
+// questão pra extrair da mesma fonte, ou o professor pode querer
+// reprocessar mesmo assim).
+async function buscarMessageIdsProcessados(criadoPorId, messageIds) {
+  if (!criadoPorId || !messageIds || !messageIds.length) return new Set();
+  const banco = exigirFirestore();
+  const processados = new Set();
+
+  // Firestore limita 'in' a 10 valores por consulta — quebra em lotes.
+  for (let i = 0; i < messageIds.length; i += 10) {
+    const lote = messageIds.slice(i, i + 10);
+    const snapshot = await banco.collection('questoes')
+      .where('criadoPorId', '==', criadoPorId)
+      .where('emailMessageId', 'in', lote)
+      .get();
+    snapshot.docs.forEach((doc) => {
+      const dados = doc.data();
+      processados.add(`${dados.emailMessageId}::${dados.emailFonte || ''}`);
+    });
+  }
+
+  return processados;
 }
 
 // Converte o documento do Firestore no formato consumido pela interface,
@@ -522,6 +555,7 @@ module.exports = {
   obterFirestore,
   criarQuestao,
   listarQuestoes,
+  buscarMessageIdsProcessados,
   atualizarQuestao,
   excluirQuestao,
   buscarQuestaoPorId,

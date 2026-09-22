@@ -1,8 +1,9 @@
 // emailService.js
-// Conecta numa caixa do Gmail via IMAP, busca e-mails não lidos, e extrai
-// conteúdo de cada um: texto do corpo da mensagem + texto de qualquer
-// anexo em PDF, DOCX ou imagem. Cada e-mail processado é marcado como lido, para
-// não ser reprocessado na próxima verificação.
+// Conecta numa caixa do Gmail via IMAP e busca, no histórico completo,
+// e-mails vindos do endereço cadastrado do professor logado, extraindo
+// o conteúdo de cada um: texto do corpo da mensagem + texto de qualquer
+// anexo em PDF, DOCX ou imagem. Nada é marcado como lido — a deduplicação
+// de "já processado" é feita à parte, por messageId (ver firebase.js).
 
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
@@ -36,13 +37,26 @@ async function extrairAnexo(anexo) {
   }
 }
 
-// Verifica a caixa de entrada, processa todo e-mail não lido e retorna
-// um array com o que foi extraído de cada um.
-async function verificarNovosEmails() {
+// Busca, no histórico completo da caixa (não só não lidos), todo e-mail
+// vindo de um remetente específico — o e-mail cadastrado do professor
+// logado. Isso resolve dois problemas do fluxo antigo (que buscava só
+// não lidos, de qualquer remetente, marcando como lido na hora):
+//   1. atribuição errada — antes, quem salvava a questão era sempre quem
+//      estivesse logado no momento de clicar "Verificar agora", não quem
+//      de fato mandou o e-mail;
+//   2. e-mails "perdidos" — como eram marcados como lidos ao processar,
+//      um e-mail que o professor não salvou na hora sumia da lista sem
+//      chance de tentar de nova depois.
+// Nada aqui é marcado como lido — é só leitura. Quem decide o que já foi
+// aproveitado é o dedup por messageId feito no server.js/firebase.js.
+async function buscarEmailsPorRemetente(emailRemetente, limite = 30) {
   if (!credenciaisConfiguradas()) {
     throw new Error(
       'Credenciais do Gmail não configuradas. Defina GMAIL_USER e GMAIL_APP_PASSWORD no .env.'
     );
+  }
+  if (!emailRemetente) {
+    throw new Error('E-mail do professor não encontrado no cadastro.');
   }
 
   const client = new ImapFlow({
@@ -62,10 +76,12 @@ async function verificarNovosEmails() {
   try {
     const lock = await client.getMailboxLock('INBOX');
     try {
-      // Busca apenas mensagens ainda não lidas
-      const uids = await client.search({ seen: false });
+      const uids = await client.search({ from: emailRemetente });
+      // Mais recentes primeiro, limitado pra não reprocessar a caixa toda
+      // a cada clique.
+      const uidsRecentes = uids.slice(-limite).reverse();
 
-      for (const uid of uids) {
+      for (const uid of uidsRecentes) {
         const mensagem = await client.fetchOne(uid, { source: true });
         const parseado = await simpleParser(mensagem.source);
 
@@ -79,15 +95,13 @@ async function verificarNovosEmails() {
         }
 
         emailsProcessados.push({
+          messageId: parseado.messageId || `uid-${uid}`,
           de: parseado.from?.text || null,
           assunto: parseado.subject || null,
           data: parseado.date || null,
           textoCorpo: (parseado.text || '').trim(),
           anexos: anexosExtraidos,
         });
-
-        // Marca como lido para não processar de novo na próxima verificação
-        await client.messageFlagsAdd(uid, ['\\Seen']);
       }
     } finally {
       lock.release();
@@ -163,4 +177,4 @@ async function enviarEmailVerificacao(destino, nome, link) {
   return { enviado: true };
 }
 
-module.exports = { verificarNovosEmails, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao };
+module.exports = { buscarEmailsPorRemetente, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao };
