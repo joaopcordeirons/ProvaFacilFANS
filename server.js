@@ -559,6 +559,24 @@ const MIME_SAIDA = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
 
+// Formata "Aprovada em DD/MM/AAAA por Fulano" pro campo "APROVAÇÃO DO
+// COORDENADOR:" do cabeçalho — só quando a prova já foi de fato aprovada
+// (revisadoEm/revisadoPorNome vêm do momento em que a Direção aprovou,
+// ver revisarProva em firebase.js). Nos demais status o campo some em
+// branco, pra Repografia/professor não confundir com aprovação.
+function formatarAprovacaoCoordenador(prova) {
+  if (prova.status !== 'aprovada') return '';
+  const dataFormatada = prova.revisadoEm
+    ? new Date(prova.revisadoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    : null;
+  if (dataFormatada && prova.revisadoPorNome) {
+    return `Aprovada em ${dataFormatada} por ${prova.revisadoPorNome}`;
+  }
+  if (dataFormatada) return `Aprovada em ${dataFormatada}`;
+  if (prova.revisadoPorNome) return `Aprovada por ${prova.revisadoPorNome}`;
+  return 'Aprovada';
+}
+
 function dadosDaProva(corpo, questoes) {
   return {
     titulo: corpo.titulo,
@@ -568,7 +586,7 @@ function dadosDaProva(corpo, questoes) {
     etapa: corpo.etapa,
     aluno: corpo.aluno,
     valorProva: corpo.valorProva,
-    aprovacaoCoordenador: corpo.aprovacaoCoordenador,
+    aprovacaoCoordenador: formatarAprovacaoCoordenador(corpo),
     professor: corpo.professor,
     instrucoes: corpo.instrucoes,
     linhasResposta: corpo.linhasResposta,
@@ -996,6 +1014,7 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
       comentario,
       questoesReprovadas,
       revisorId: req.usuarioId,
+      revisorNome: req.usuario.nome,
     });
 
     // Avisa quem criou a prova (se ainda tiver conta ativa e e-mail) que

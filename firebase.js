@@ -375,6 +375,7 @@ async function salvarRascunho(dados) {
     comentarioCoordenador: '',
     questoesReprovadas: [],
     revisadoPorId: null,
+    revisadoPorNome: null,
     revisadoEm: null,
     formatos: [],
     impressa: false,
@@ -450,6 +451,7 @@ async function registrarProva(dados) {
     comentarioCoordenador: '',
     questoesReprovadas: [],
     revisadoPorId: null,
+    revisadoPorNome: null,
     revisadoEm: null,
     formatos: formato,
     impressa: false,
@@ -493,6 +495,7 @@ function formatarProva(doc) {
     comentarioCoordenador: dados.comentarioCoordenador || '',
     questoesReprovadas: Array.isArray(dados.questoesReprovadas) ? dados.questoesReprovadas : [],
     revisadoPorId: dados.revisadoPorId || null,
+    revisadoPorNome: dados.revisadoPorNome || null,
     impressa: !!dados.impressa,
     impressaPorId: dados.impressaPorId || null,
     criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
@@ -514,7 +517,7 @@ async function buscarProvaPorId(id) {
 // A Direção aprova, reprova ou deixa a prova em análise. Registra um
 // comentário geral e, se for o caso, quais questões pesaram na
 // reprovação — o professor vê tudo isso assim que reabrir a prova.
-async function revisarProva(id, { status, comentario, questoesReprovadas, revisorId } = {}) {
+async function revisarProva(id, { status, comentario, questoesReprovadas, revisorId, revisorNome } = {}) {
   validarId(id);
   if (!STATUS_REVISAO_COORDENADOR.includes(status)) {
     throw Object.assign(new Error('Status de revisão inválido.'), { statusCode: 400 });
@@ -537,6 +540,7 @@ async function revisarProva(id, { status, comentario, questoesReprovadas, reviso
     comentarioCoordenador: String(comentario || '').trim().slice(0, 2000),
     questoesReprovadas: flags,
     revisadoPorId: revisorId || null,
+    revisadoPorNome: revisorNome || null,
     revisadoEm: admin.firestore.FieldValue.serverTimestamp(),
     atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
   });

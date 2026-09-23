@@ -146,7 +146,7 @@ function blocoCabecalho(prova) {
       rotulo('ETAPA:', 2), valor(prova.etapa),
     ], 271),
     linha([
-      rotulo('PERÍODO:'), valor(prova.periodo),
+      rotulo('PERÍODO:'), valor(prova.periodo, 1, 'center'),
       rotulo('APROVAÇÃO DO COORDENADOR:'), valor(prova.aprovacaoCoordenador, 4),
     ], 502),
     linha([

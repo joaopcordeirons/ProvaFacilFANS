@@ -311,7 +311,7 @@ function desenharCabecalho(doc, prova) {
 
   y = desenharLinhaCabecalho(doc, y, pt(502), [
     { tipo: 'rotulo', texto: 'PERÍODO:' },
-    { tipo: 'valor', texto: prova.periodo },
+    { tipo: 'valor', texto: prova.periodo, align: 'center' },
     { tipo: 'rotulo', texto: 'APROVAÇÃO DO COORDENADOR:' },
     { tipo: 'valor', texto: prova.aprovacaoCoordenador, span: 4 },
   ]);
