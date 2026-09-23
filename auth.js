@@ -52,9 +52,22 @@ function validarEmail(email) {
   }
 }
 
+// Regra de senha forte: mínimo de 10 caracteres, com pelo menos uma
+// letra maiúscula, uma minúscula, um número e um caractere especial.
+// Mensagem de erro sempre lista tudo que ainda falta, não só o primeiro
+// requisito que falhou, pra usuário não ter que tentar várias vezes.
 function validarSenha(senha) {
-  if (typeof senha !== 'string' || senha.length < 8) {
-    throw erro('A senha precisa ter pelo menos 8 caracteres.', 400);
+  if (typeof senha !== 'string') {
+    throw erro('Informe uma senha.', 400);
+  }
+  const faltando = [];
+  if (senha.length < 10) faltando.push('pelo menos 10 caracteres');
+  if (!/[a-z]/.test(senha)) faltando.push('uma letra minúscula');
+  if (!/[A-Z]/.test(senha)) faltando.push('uma letra maiúscula');
+  if (!/[0-9]/.test(senha)) faltando.push('um número');
+  if (!/[^A-Za-z0-9]/.test(senha)) faltando.push('um caractere especial (ex: ! @ # $ %)');
+  if (faltando.length) {
+    throw erro(`A senha precisa ter ${faltando.join(', ')}.`, 400);
   }
 }
 

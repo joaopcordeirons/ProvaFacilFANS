@@ -364,8 +364,9 @@ Esta avaliação tem duração total de uma hora e quarenta minutos;</textarea><
         <p>Informe sua senha atual e a nova senha desejada.</p>
         <form id="formAlterarSenha">
           <label class="campo">Senha atual<input type="password" id="senhaAtualCampo" required></label>
-          <label class="campo">Nova senha<input type="password" id="senhaNovaCampo" required minlength="8"></label>
-          <label class="campo">Confirmar nova senha<input type="password" id="senhaNovaConfirmarCampo" required minlength="8"></label>
+          <label class="campo">Nova senha<input type="password" id="senhaNovaCampo" required minlength="10"></label>
+          <div class="campo-dica">Mínimo de 10 caracteres, com maiúscula, minúscula, número e caractere especial.</div>
+          <label class="campo">Confirmar nova senha<input type="password" id="senhaNovaConfirmarCampo" required minlength="10"></label>
           <div class="status" id="statusAlterarSenha"></div>
           <div class="modal-acoes">
             <button type="button" class="btn-secundario" id="btnCancelarAlterarSenha">Cancelar</button>

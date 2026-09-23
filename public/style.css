@@ -1114,6 +1114,7 @@
   }
   .cursos-checklist input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--ink); }
   .campo-erro { color: var(--claret); font-size: 0.78rem; margin-top: 0.35rem; }
+  .campo-dica { color: var(--ink-muted); font-size: 0.78rem; margin-top: 0.35rem; }
 
   @media (max-width: 760px) {
     .perfil-grid { grid-template-columns: 1fr; }
