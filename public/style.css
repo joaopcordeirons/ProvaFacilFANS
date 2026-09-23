@@ -858,9 +858,6 @@
   table.tabela-provas .prova-titulo { font-weight: 600; }
   table.tabela-provas .numerica { font-variant-numeric: tabular-nums; }
   table.tabela-provas .discreta { color: var(--ink-muted); }
-  table.tabela-provas td[data-th="Valor"] { text-align: center; text-transform: uppercase; }
-  table.tabela-provas td[data-th="Disciplina"] { text-align: center; text-transform: uppercase; }
-  table.tabela-provas td[data-th="Status"] { text-align: center; }
   table.tabela-provas .acao { text-align: right; }
   table.tabela-provas .acao button {
     border: none; background: transparent; color: var(--ink-muted); cursor: pointer;

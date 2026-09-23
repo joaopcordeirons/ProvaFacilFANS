@@ -75,11 +75,7 @@ function escapeHtml(texto) {
 
 function formatarPontos(valor) {
   const numero = Number(valor);
-  const seguro = Number.isFinite(numero) ? numero : 0;
-  // Só aparece vírgula quando o valor realmente tem casa decimal — um
-  // número inteiro (5) mostra "5", não "5,0". Se o professor quiser
-  // casas decimais na pontuação, ele mesmo digita (ex.: 7,5).
-  return Number.isInteger(seguro) ? String(seguro) : seguro.toFixed(1).replace('.', ',');
+  return (Number.isFinite(numero) ? numero : 0).toFixed(1).replace('.', ',');
 }
 
 function textoLimpo(questao) {
