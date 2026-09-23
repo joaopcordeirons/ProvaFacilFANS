@@ -122,7 +122,7 @@
   function linhaProva(prova) {
     const status = STATUS[prova.status] || STATUS.rascunho;
     const valor = prova.pontuacaoTotal
-      ? `${formatarPontos(prova.pontuacaoTotal)} pts`
+      ? `${formatarPontos(prova.pontuacaoTotal)} pontos`
       : '—';
     const direcao = ehDirecao();
 
