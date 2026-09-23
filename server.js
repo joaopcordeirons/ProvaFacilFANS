@@ -30,6 +30,7 @@ const {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  editarCabecalhoAprovada,
   marcarImpressao,
   excluirProva,
 } = require('./firebase');
@@ -1035,6 +1036,39 @@ app.patch('/api/provas/:id/revisao', express.json({ limit: '8kb' }), async (req,
     return res.json(atualizada);
   } catch (err) {
     console.error('Erro ao revisar a prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
+  }
+});
+
+// Deixa o professor corrigir só o cabeçalho de uma prova já aprovada
+// (curso, período, data, etapa, valor, professor, instruções, linhas de
+// resposta) — nada de questões, já que o conteúdo foi o que a Direção
+// revisou e aprovou. Útil pra corrigir um erro de digitação (ex.: período
+// errado) sem precisar reabrir a prova inteira pra uma nova revisão.
+app.patch('/api/provas/:id/cabecalho', express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const existente = await buscarProvaPorId(req.params.id);
+    if (!existente) return res.status(404).json({ erro: 'Prova não encontrada.' });
+
+    if (req.usuario.perfil !== 'direcao') {
+      if (existente.criadoPorId !== req.usuarioId) {
+        return res.status(403).json({ erro: 'Você só pode editar o cabeçalho de provas que você mesmo criou.' });
+      }
+      if (!podeUsarCurso(req, req.body?.curso || existente.curso)) {
+        return res.status(403).json({ erro: 'Você não leciona nesse curso.' });
+      }
+    }
+    if (existente.status !== 'aprovada') {
+      return res.status(403).json({ erro: 'O cabeçalho só pode ser editado depois que a prova for aprovada pela Direção.' });
+    }
+
+    const atualizada = await editarCabecalhoAprovada(req.params.id, req.body || {}, {
+      professorId: req.usuarioId,
+      permitirQualquerAutor: req.usuario.perfil === 'direcao',
+    });
+    return res.json(atualizada);
+  } catch (err) {
+    console.error('Erro ao editar o cabeçalho da prova:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });

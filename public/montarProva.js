@@ -29,7 +29,10 @@
   const linkPreviaNovaAbaEl = document.getElementById('linkPreviaNovaAba');
   const btnSalvarRascunhoEl = document.getElementById('btnSalvarRascunho');
   const btnEnviarCoordenadorEl = document.getElementById('btnEnviarCoordenador');
+  const btnSalvarCabecalhoEl = document.getElementById('btnSalvarCabecalho');
   const avisoProvaTravadaEl = document.getElementById('avisoProvaTravada');
+  const avisoProvaTravadaTituloEl = document.getElementById('avisoProvaTravadaTitulo');
+  const avisoProvaTravadaTextoEl = document.getElementById('avisoProvaTravadaTexto');
   const btnDuplicarProvaEl = document.getElementById('btnDuplicarProva');
   const btnAdicionarMaisEl = document.getElementById('btnAdicionarMais');
   const btnRemoverSelecionadasEl = document.getElementById('btnRemoverSelecionadas');
@@ -194,24 +197,43 @@
         : '');
   }
 
-  // Uma prova só é editável de verdade enquanto ainda for um rascunho —
-  // depois de enviada, a tela vira só leitura (ver aplicarTravamento).
+  // Uma prova só é editável de verdade (conteúdo e cabeçalho) enquanto
+  // ainda for um rascunho — depois de enviada, a tela vira só leitura
+  // (ver aplicarTravamento). A única exceção é o cabeçalho de uma prova
+  // já aprovada, liberado à parte por provaPermiteEditarCabecalho.
   function provaEstaTravada() {
     return Boolean(Estado.provaAtualStatus) && Estado.provaAtualStatus !== 'rascunho';
   }
 
+  // Uma prova aprovada continua travada por dentro (questões, envio), mas
+  // o professor ainda pode corrigir o cabeçalho (curso, período, data
+  // etc.) — não é conteúdo que a Direção revisou, então não precisa
+  // reabrir a prova inteira nem duplicar para consertar um erro assim.
+  function provaPermiteEditarCabecalho() {
+    return Estado.provaAtualStatus === 'aprovada';
+  }
+
   // Desabilita o cabeçalho e as ações que alterariam a prova enviada;
-  // "Duplicar como nova prova" é o único jeito de voltar a editar. Some
-  // Salvar/Enviar da tela em vez de só desabilitar — botão apagado do
-  // lado do aviso não ajudava em nada.
+  // "Duplicar como nova prova" é o único jeito de voltar a editar as
+  // questões. Numa prova aprovada, os campos do cabeçalho continuam
+  // habilitados e "Salvar cabeçalho" aparece no lugar de Salvar/Enviar.
   function aplicarTravamento() {
     const travada = provaEstaTravada();
+    const podeEditarCabecalho = provaPermiteEditarCabecalho();
     avisoProvaTravadaEl.classList.toggle('oculto', !travada);
+    if (podeEditarCabecalho) {
+      avisoProvaTravadaTituloEl.textContent = 'Prova aprovada — só o cabeçalho pode ser corrigido';
+      avisoProvaTravadaTextoEl.textContent = 'Esta prova já foi aprovada pela Direção. As questões não podem mais ser alteradas, mas você pode corrigir os campos do cabeçalho abaixo (curso, período, data etc.) e salvar. Para mudar as questões, duplique-a como uma prova nova.';
+    } else {
+      avisoProvaTravadaTituloEl.textContent = 'Prova já enviada — só leitura';
+      avisoProvaTravadaTextoEl.textContent = 'Esta prova já foi enviada para o coordenador e não pode mais ser alterada. Para corrigir algo, duplique-a como uma prova nova.';
+    }
     btnSalvarRascunhoEl.classList.toggle('oculto', travada);
     btnEnviarCoordenadorEl.classList.toggle('oculto', travada);
+    btnSalvarCabecalhoEl.classList.toggle('oculto', !podeEditarCabecalho);
     CAMPOS_CABECALHO_IDS.forEach((id) => {
       const campo = document.getElementById(id);
-      if (campo) campo.disabled = travada;
+      if (campo) campo.disabled = travada && !podeEditarCabecalho;
     });
     btnAdicionarMaisEl.disabled = travada;
     return travada;
@@ -595,6 +617,37 @@
     });
   }
 
+  // Salva só o cabeçalho de uma prova já aprovada — usa a rota própria
+  // (/cabecalho) em vez de rascunho/enviar, que exigem status "rascunho".
+  // Não mexe em questões nem no histórico de revisão da Direção.
+  async function salvarCabecalho() {
+    if (!Estado.provaAtualId || !provaPermiteEditarCabecalho()) return;
+
+    btnSalvarCabecalhoEl.disabled = true;
+    statusEnvioEl.textContent = 'Salvando cabeçalho...';
+    statusEnvioEl.className = 'status';
+
+    try {
+      const dados = dadosDoCabecalho();
+      const prova = await window.App.pedirJson(`/api/provas/${encodeURIComponent(Estado.provaAtualId)}/cabecalho`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      });
+
+      Estado.provaAtualStatus = prova.status;
+      statusEnvioEl.textContent = 'Cabeçalho atualizado.';
+      statusEnvioEl.className = 'status ok';
+      window.Painel?.renderizar();
+      if (abaAtiva === 'previa') atualizarPrevia({ forcar: true });
+    } catch (err) {
+      statusEnvioEl.textContent = err.message;
+      statusEnvioEl.className = 'status erro';
+    } finally {
+      btnSalvarCabecalhoEl.disabled = false;
+    }
+  }
+
   // "Duplicar como nova prova": única saída da tela travada. Esquece o
   // vínculo com a prova enviada — o que já estiver no formulário (mesmas
   // questões, mesmo cabeçalho) vira o ponto de partida de uma prova nova,
@@ -632,6 +685,7 @@
   );
   btnSalvarRascunhoEl.addEventListener('click', salvarRascunho);
   btnEnviarCoordenadorEl.addEventListener('click', enviarParaCoordenador);
+  btnSalvarCabecalhoEl.addEventListener('click', salvarCabecalho);
   btnDuplicarProvaEl.addEventListener('click', duplicarProva);
   document.querySelectorAll('[data-aba-revisao]').forEach((botao) => {
     botao.addEventListener('click', () => selecionarAba(botao.dataset.abaRevisao));

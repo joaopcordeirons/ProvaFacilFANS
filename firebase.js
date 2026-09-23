@@ -464,6 +464,62 @@ async function registrarProva(dados) {
   return formatarProva(await referencia.get());
 }
 
+// Campos do cabeçalho que o professor pode corrigir numa prova já
+// aprovada — de propósito um subconjunto de camposDaProva: nada de
+// questaoIds/questoesSnapshot/pontuacaoTotal aqui, porque essa edição não
+// pode tocar no conteúdo que a Direção já revisou e aprovou.
+function camposDoCabecalho(dados) {
+  return {
+    titulo: String(dados.titulo || 'Avaliação').slice(0, 160),
+    curso: validarCurso(dados.curso),
+    periodo: String(dados.periodo || '').slice(0, 40),
+    etapa: String(dados.etapa || '').slice(0, 20),
+    data: String(dados.data || '').slice(0, 20),
+    valorProva: String(dados.valorProva || '').slice(0, 20),
+    professor: String(dados.professor || '').slice(0, 120),
+    instrucoes: String(dados.instrucoes || '').slice(0, 2000),
+    linhasResposta: Number.isFinite(Number(dados.linhasResposta))
+      ? Math.max(0, Math.min(Math.trunc(Number(dados.linhasResposta)), 20))
+      : 5,
+  };
+}
+
+// Deixa o professor corrigir só o cabeçalho (curso, período, data, etapa,
+// valor, professor, instruções, linhas de resposta) de uma prova que já
+// foi aprovada — pensado pra erros de digitação notados depois da
+// aprovação (ex.: período errado), sem reabrir as questões nem mexer no
+// status/histórico de revisão da Direção. Só o professor que criou a
+// prova pode usar isso, e só quando ela já está aprovada — enquanto está
+// em rascunho ou em análise, o fluxo normal (salvar rascunho / enviar) já
+// cobre o cabeçalho inteiro.
+async function editarCabecalhoAprovada(id, dados, { professorId, permitirQualquerAutor = false } = {}) {
+  validarId(id);
+  const banco = exigirFirestore();
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+  const existente = documento.data();
+  if (!permitirQualquerAutor && existente.criadoPorId !== professorId) {
+    throw Object.assign(
+      new Error('Você só pode editar o cabeçalho de provas que você mesmo criou.'),
+      { statusCode: 403 },
+    );
+  }
+  if (existente.status !== 'aprovada') {
+    throw Object.assign(
+      new Error('O cabeçalho só pode ser editado depois que a prova for aprovada pela Direção.'),
+      { statusCode: 403 },
+    );
+  }
+  await referencia.update({
+    ...camposDoCabecalho(dados),
+    atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return formatarProva(await referencia.get());
+}
+
 async function listarProvas(limite = 20, cursosFiltro = null) {
   const banco = exigirFirestore();
 
@@ -602,6 +658,7 @@ module.exports = {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  editarCabecalhoAprovada,
   marcarImpressao,
   excluirProva,
   sanitizarHtml,
