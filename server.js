@@ -566,22 +566,22 @@ const MIME_SAIDA = {
 // branco, pra Repografia/professor não confundir com aprovação.
 function formatarAprovacaoCoordenador(prova) {
   if (prova.status !== 'aprovada') return '';
-  const dataFormatada = prova.revisadoEm
-    ? new Date(prova.revisadoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-    : null;
-  if (dataFormatada && prova.revisadoPorNome) {
-    return `Aprovada em ${dataFormatada} por ${prova.revisadoPorNome}`;
-  }
-  if (dataFormatada) return `Aprovada em ${dataFormatada}`;
-  if (prova.revisadoPorNome) return `Aprovada por ${prova.revisadoPorNome}`;
   return 'Aprovada';
+}
+
+// Acrescenta o "º" no número do período (ex.: "1" -> "1º") pro cabeçalho da
+// prova. Se o valor já vier com "º" ou não for só um número, deixa como está.
+function formatarPeriodo(periodo) {
+  const texto = (periodo ?? '').toString().trim();
+  if (/^\d+$/.test(texto)) return `${texto}º`;
+  return texto;
 }
 
 function dadosDaProva(corpo, questoes) {
   return {
     titulo: corpo.titulo,
     curso: corpo.curso || corpo.disciplina,
-    periodo: corpo.periodo || corpo.turma,
+    periodo: formatarPeriodo(corpo.periodo || corpo.turma),
     data: corpo.data,
     etapa: corpo.etapa,
     aluno: corpo.aluno,
