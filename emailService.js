@@ -121,6 +121,34 @@ async function buscarEmailsPorRemetente(emailRemetente, limite = 30) {
 // Antes de mover, confirma que o e-mail é mesmo do remetente informado —
 // evita que um professor exclua, por engano ou não, um e-mail de outro
 // professor na mesma caixa compartilhada.
+// Descobre o nome real da pasta de Lixeira via IMAP (flag especial
+// \Trash), em vez de supor um nome fixo. O Gmail nomeia essa pasta de
+// forma diferente por idioma da conta — "[Gmail]/Trash" (inglês),
+// "[Gmail]/Lixeira" (português), "[Google Mail]/Trash" (contas antigas
+// @googlemail.com) etc. Usar sempre "[Gmail]/Trash" fazia o messageMove
+// falhar silenciosamente em qualquer conta que não estivesse em inglês —
+// era por isso que "Remover da tela" não excluía de fato o e-mail.
+let cacheNomeLixeira = null;
+async function obterNomeLixeira(client) {
+  if (cacheNomeLixeira) return cacheNomeLixeira;
+  const caixas = await client.list();
+  const lixeira = caixas.find((caixa) => (caixa.specialUse === '\\Trash'));
+  if (lixeira) {
+    cacheNomeLixeira = lixeira.path;
+    return cacheNomeLixeira;
+  }
+  // Fallback só pro caso (raro) de o servidor não anunciar specialUse:
+  // tenta os nomes mais comuns até um existir.
+  const candidatos = ['[Gmail]/Trash', '[Gmail]/Lixeira', '[Google Mail]/Trash', '[Google Mail]/Bin'];
+  const existente = caixas.map((caixa) => caixa.path);
+  const encontrado = candidatos.find((nome) => existente.includes(nome));
+  if (!encontrado) {
+    throw new Error('Não foi possível localizar a pasta de Lixeira desta conta do Gmail.');
+  }
+  cacheNomeLixeira = encontrado;
+  return cacheNomeLixeira;
+}
+
 async function excluirEmailPorUid(uid, emailRemetente) {
   if (!credenciaisConfiguradas()) {
     throw new Error(
@@ -147,6 +175,7 @@ async function excluirEmailPorUid(uid, emailRemetente) {
 
   await client.connect();
   try {
+    const nomeLixeira = await obterNomeLixeira(client);
     const lock = await client.getMailboxLock('INBOX');
     try {
       const mensagem = await client.fetchOne(uid, { envelope: true }, { uid: true });
@@ -155,7 +184,7 @@ async function excluirEmailPorUid(uid, emailRemetente) {
       if (!mensagem || !remetenteDaMensagem.includes(emailRemetente.toLowerCase())) {
         throw new Error('Esse e-mail não pertence ao seu cadastro.');
       }
-      await client.messageMove(uid, '[Gmail]/Trash', { uid: true });
+      await client.messageMove(uid, nomeLixeira, { uid: true });
     } finally {
       lock.release();
     }
