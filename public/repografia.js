@@ -54,15 +54,27 @@ document.getElementById('btnSair').addEventListener('click', async () => {
 /* -------------------------------------------------------------- lista */
 
 const tabelaEl = document.getElementById('tabelaProvasRepografia');
+const filtroOcultarEl = document.getElementById('filtroOcultarImpressas');
+
+// Provas já carregadas, mantidas em memória para o filtro "ocultar já
+// impressas" não precisar buscar tudo de novo no servidor a cada clique.
+let provasCarregadas = [];
 
 function linhaProva(prova) {
   const link = `/api/provas/${encodeURIComponent(prova.id)}/previa-pdf`;
+  const impressa = !!prova.impressa;
   return `
-    <tr>
+    <tr class="${impressa ? 'linha-impressa' : ''}" data-id="${escapeHtml(prova.id)}">
       <td class="prova-titulo" data-th="Prova">${escapeHtml(prova.titulo)}</td>
       <td data-th="Disciplina">${escapeHtml(prova.curso || '—')}</td>
       <td class="numerica" data-th="Questões">${escapeHtml(String(prova.quantidadeQuestoes || 0))}</td>
       <td class="discreta" data-th="Aprovada em">${escapeHtml(dataRelativa(prova.atualizadoEm || prova.criadoEm))}</td>
+      <td data-th="Impressa">
+        <label class="impressa-toggle">
+          <input type="checkbox" class="marcarImpressa" data-id="${escapeHtml(prova.id)}" ${impressa ? 'checked' : ''}>
+          <span class="impressa-rotulo ${impressa ? 'feita' : 'pendente'}">${impressa ? 'Impressa' : 'Pendente'}</span>
+        </label>
+      </td>
       <td class="acao" data-th="">
         <a href="${link}" target="_blank" rel="noopener">Abrir PDF ↗</a>
       </td>
@@ -70,28 +82,72 @@ function linhaProva(prova) {
   `;
 }
 
+function renderizarTabela() {
+  const ocultarImpressas = filtroOcultarEl.checked;
+  const visiveis = ocultarImpressas
+    ? provasCarregadas.filter((prova) => !prova.impressa)
+    : provasCarregadas;
+
+  if (!provasCarregadas.length) {
+    tabelaEl.innerHTML = '<div class="lista-vazia">Nenhuma prova aprovada no momento.</div>';
+    return;
+  }
+  if (!visiveis.length) {
+    tabelaEl.innerHTML = '<div class="lista-vazia">Todas as provas já foram impressas.</div>';
+    return;
+  }
+
+  tabelaEl.innerHTML = `
+    <table class="tabela-provas">
+      <thead>
+        <tr>
+          <th>Prova</th><th>Disciplina</th><th class="numerica">Questões</th>
+          <th>Aprovada em</th><th>Impressa</th><th></th>
+        </tr>
+      </thead>
+      <tbody>${visiveis.map(linhaProva).join('')}</tbody>
+    </table>
+  `;
+
+  tabelaEl.querySelectorAll('.marcarImpressa').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => alternarImpressao(checkbox));
+  });
+}
+
+// Marca/desmarca no servidor assim que o professor da Repografia clica na
+// caixinha, e atualiza o estado local (sem recarregar a lista inteira) —
+// se der erro, desfaz o clique e avisa.
+async function alternarImpressao(checkbox) {
+  const id = checkbox.dataset.id;
+  const impressa = checkbox.checked;
+  checkbox.disabled = true;
+  try {
+    const { prova } = await pedirJson(`/api/provas/${encodeURIComponent(id)}/impressao`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ impressa }),
+    });
+    const indice = provasCarregadas.findIndex((p) => p.id === id);
+    if (indice !== -1) provasCarregadas[indice] = prova;
+    renderizarTabela();
+  } catch (err) {
+    checkbox.checked = !impressa;
+    checkbox.disabled = false;
+    alert(err.message || 'Não foi possível atualizar. Tente novamente.');
+  }
+}
+
 async function carregarProvas() {
   try {
     const { provas } = await pedirJson('/api/provas?limite=50');
-    if (!provas.length) {
-      tabelaEl.innerHTML = '<div class="lista-vazia">Nenhuma prova aprovada no momento.</div>';
-      return;
-    }
-    tabelaEl.innerHTML = `
-      <table class="tabela-provas">
-        <thead>
-          <tr>
-            <th>Prova</th><th>Disciplina</th><th class="numerica">Questões</th>
-            <th>Aprovada em</th><th></th>
-          </tr>
-        </thead>
-        <tbody>${provas.map(linhaProva).join('')}</tbody>
-      </table>
-    `;
+    provasCarregadas = provas;
+    renderizarTabela();
   } catch (err) {
     tabelaEl.innerHTML = `<div class="lista-vazia">${escapeHtml(err.message)}</div>`;
   }
 }
+
+filtroOcultarEl.addEventListener('change', renderizarTabela);
 
 carregarConta();
 carregarProvas();

@@ -377,6 +377,9 @@ async function salvarRascunho(dados) {
     revisadoPorId: null,
     revisadoEm: null,
     formatos: [],
+    impressa: false,
+    impressaEm: null,
+    impressaPorId: null,
     criadoPorId: dados.criadoPorId || null,
     criadoEm: agora,
     atualizadoEm: agora,
@@ -449,6 +452,9 @@ async function registrarProva(dados) {
     revisadoPorId: null,
     revisadoEm: null,
     formatos: formato,
+    impressa: false,
+    impressaEm: null,
+    impressaPorId: null,
     criadoPorId: dados.criadoPorId || null,
     criadoEm: agora,
     atualizadoEm: agora,
@@ -487,9 +493,12 @@ function formatarProva(doc) {
     comentarioCoordenador: dados.comentarioCoordenador || '',
     questoesReprovadas: Array.isArray(dados.questoesReprovadas) ? dados.questoesReprovadas : [],
     revisadoPorId: dados.revisadoPorId || null,
+    impressa: !!dados.impressa,
+    impressaPorId: dados.impressaPorId || null,
     criadoEm: dados.criadoEm?.toDate?.()?.toISOString?.() || null,
     atualizadoEm: dados.atualizadoEm?.toDate?.()?.toISOString?.() || null,
     revisadoEm: dados.revisadoEm?.toDate?.()?.toISOString?.() || null,
+    impressaEm: dados.impressaEm?.toDate?.()?.toISOString?.() || null,
   };
 }
 
@@ -534,6 +543,28 @@ async function revisarProva(id, { status, comentario, questoesReprovadas, reviso
   return formatarProva(await referencia.get());
 }
 
+// Marca/desmarca que a Repografia já imprimiu essa prova. Só faz sentido
+// para provas aprovadas (é a única situação em que a Repografia enxerga
+// a prova) — quem garante isso é o server.js, checando o status antes de
+// chamar esta função.
+async function marcarImpressao(id, { impressa, usuarioId } = {}) {
+  validarId(id);
+  const banco = exigirFirestore();
+  const referencia = banco.collection('provas').doc(id);
+  const documento = await referencia.get();
+  if (!documento.exists) {
+    throw Object.assign(new Error('Prova não encontrada.'), { statusCode: 404 });
+  }
+
+  const marcarComoImpressa = !!impressa;
+  await referencia.update({
+    impressa: marcarComoImpressa,
+    impressaEm: marcarComoImpressa ? admin.firestore.FieldValue.serverTimestamp() : null,
+    impressaPorId: marcarComoImpressa ? (usuarioId || null) : null,
+  });
+  return formatarProva(await referencia.get());
+}
+
 async function excluirQuestao(id) {
   validarId(id);
   const banco = exigirFirestore();
@@ -567,6 +598,7 @@ module.exports = {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  marcarImpressao,
   excluirProva,
   sanitizarHtml,
 };

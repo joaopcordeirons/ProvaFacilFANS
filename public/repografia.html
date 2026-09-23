@@ -30,6 +30,18 @@
     border-radius: 6px; padding: 0.35rem 0.7rem; white-space: nowrap;
   }
   table.tabela-provas .acao a:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  .repo-card-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .repo-card-topo h1 { margin: 0 0 0.3rem; }
+  .repo-card-topo p.subtitle { margin: 0; }
+  .repo-filtro { display: flex; align-items: center; gap: 0.45rem; font-size: 0.83rem; color: var(--ink-muted); white-space: nowrap; }
+
+  .impressa-toggle { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; }
+  .impressa-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .impressa-rotulo { font-size: 0.8rem; font-weight: 500; }
+  .impressa-rotulo.pendente { color: var(--ink-muted); }
+  .impressa-rotulo.feita { color: var(--accent); }
+  tr.linha-impressa { opacity: 0.6; }
 </style>
 </head>
 <body>
@@ -52,8 +64,16 @@
     </div>
 
     <div class="repo-card">
-      <h1>Provas aprovadas</h1>
-      <p class="subtitle">Prontas para impressão. Clique em “Abrir PDF” para visualizar e baixar.</p>
+      <div class="repo-card-topo">
+        <div>
+          <h1>Provas aprovadas</h1>
+          <p class="subtitle">Prontas para impressão. Clique em “Abrir PDF” para visualizar e baixar.</p>
+        </div>
+        <label class="repo-filtro">
+          <input type="checkbox" id="filtroOcultarImpressas">
+          Ocultar já impressas
+        </label>
+      </div>
       <div id="tabelaProvasRepografia"></div>
     </div>
   </div>

@@ -30,6 +30,7 @@ const {
   listarProvas,
   buscarProvaPorId,
   revisarProva,
+  marcarImpressao,
   excluirProva,
 } = require('./firebase');
 const {
@@ -389,16 +390,18 @@ app.use('/api/questoes', (req, res, next) => {
   return next();
 });
 
-// Dentro de /api/provas, a Repografia só pode listar (GET /) e baixar o
-// PDF de uma prova específica (GET /:id/previa-pdf) — nada de criar,
+// Dentro de /api/provas, a Repografia só pode listar (GET /), baixar o
+// PDF de uma prova específica (GET /:id/previa-pdf) e marcar/desmarcar
+// que já imprimiu uma prova (PATCH /:id/impressao) — nada de criar,
 // enviar por e-mail, revisar ou excluir. req.path já vem sem o prefixo
 // /api/provas por causa do app.use abaixo.
 app.use('/api/provas', (req, res, next) => {
   if (req.usuario.perfil !== 'repografia') return next();
-  const rotaPermitida = req.method === 'GET'
-    && (req.path === '/' || /^\/[^/]+\/previa-pdf$/.test(req.path));
+  const rotaPermitida = (req.method === 'GET'
+      && (req.path === '/' || /^\/[^/]+\/previa-pdf$/.test(req.path)))
+    || (req.method === 'PATCH' && /^\/[^/]+\/impressao$/.test(req.path));
   if (!rotaPermitida) {
-    return res.status(403).json({ erro: 'Repografia só pode consultar e baixar provas aprovadas.' });
+    return res.status(403).json({ erro: 'Repografia só pode consultar, baixar e marcar a impressão de provas aprovadas.' });
   }
   return next();
 });
@@ -787,6 +790,30 @@ app.get('/api/provas/:id/previa-pdf', async (req, res) => {
   } catch (err) {
     console.error('Erro ao montar a prévia da prova salva:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao montar a prévia.' });
+  }
+});
+
+// A Repografia marca/desmarca que já imprimiu uma prova — só para
+// controle interno dela, não muda o status da prova nem é visível para
+// o professor ou a Direção. Só funciona em provas aprovadas (é a única
+// situação em que a Repografia enxerga a prova).
+app.patch('/api/provas/:id/impressao', express.json({ limit: '1kb' }), async (req, res) => {
+  try {
+    const prova = await buscarProvaPorId(req.params.id);
+    if (!prova || prova.status !== 'aprovada') {
+      return res.status(404).json({ erro: 'Prova não encontrada.' });
+    }
+    if (!podeUsarCurso(req, prova.curso)) {
+      return res.status(403).json({ erro: 'Você não tem acesso a essa prova.' });
+    }
+    const atualizada = await marcarImpressao(req.params.id, {
+      impressa: !!req.body.impressa,
+      usuarioId: req.usuarioId,
+    });
+    return res.json({ prova: atualizada });
+  } catch (err) {
+    console.error('Erro ao marcar impressão da prova:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message || 'Falha ao marcar impressão.' });
   }
 });
 
