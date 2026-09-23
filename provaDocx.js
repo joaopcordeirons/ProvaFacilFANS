@@ -141,13 +141,13 @@ function blocoCabecalho(prova) {
   return tabela(colunas, [
     linha([celula(titulo, { larguraColunas: 7 })], 2171),
     linha([
-      rotulo('CURSO:'), valor(prova.curso),
+      rotulo('CURSO:'), valor(prova.curso, 1, 'center'),
       rotulo('DATA:'), valor(prova.data),
       rotulo('ETAPA:', 2), valor(prova.etapa),
     ], 271),
     linha([
       rotulo('PERÍODO:'), valor(prova.periodo, 1, 'center'),
-      rotulo('APROVAÇÃO DO COORDENADOR:'), valor(prova.aprovacaoCoordenador, 4),
+      rotulo('APROVAÇÃO DO COORDENADOR:'), valor(prova.aprovacaoCoordenador, 4, 'center'),
     ], 502),
     linha([
       rotulo('ALUNO:'), valor(prova.aluno, 2),

@@ -302,7 +302,7 @@ function desenharCabecalho(doc, prova) {
 
   y = desenharLinhaCabecalho(doc, y, pt(271), [
     { tipo: 'rotulo', texto: 'CURSO:' },
-    { tipo: 'valor', texto: prova.curso },
+    { tipo: 'valor', texto: prova.curso, align: 'center' },
     { tipo: 'rotulo', texto: 'DATA:' },
     { tipo: 'valor', texto: prova.data },
     { tipo: 'rotulo', texto: 'ETAPA:', span: 2 },
@@ -313,7 +313,7 @@ function desenharCabecalho(doc, prova) {
     { tipo: 'rotulo', texto: 'PERÍODO:' },
     { tipo: 'valor', texto: prova.periodo, align: 'center' },
     { tipo: 'rotulo', texto: 'APROVAÇÃO DO COORDENADOR:' },
-    { tipo: 'valor', texto: prova.aprovacaoCoordenador, span: 4 },
+    { tipo: 'valor', texto: prova.aprovacaoCoordenador, span: 4, align: 'center' },
   ]);
 
   y = desenharLinhaCabecalho(doc, y, pt(528), [

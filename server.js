@@ -567,7 +567,7 @@ const MIME_SAIDA = {
 // branco, pra Repografia/professor não confundir com aprovação.
 function formatarAprovacaoCoordenador(prova) {
   if (prova.status !== 'aprovada') return '';
-  return 'Aprovada';
+  return 'APROVADA';
 }
 
 // Acrescenta o "º" no número do período (ex.: "1" -> "1º") pro cabeçalho da
@@ -578,15 +578,46 @@ function formatarPeriodo(periodo) {
   return texto;
 }
 
+// Acrescenta o "ª" no número da etapa (ex.: "1" -> "1ª") pro cabeçalho da
+// prova. Se o valor já vier com "ª"/"º" ou não for só um número, deixa como
+// está.
+function formatarEtapa(etapa) {
+  const texto = (etapa ?? '').toString().trim();
+  if (/^\d+$/.test(texto)) return `${texto}ª`;
+  return texto;
+}
+
+// Acrescenta "PONTOS" no valor da prova pro cabeçalho, só usando vírgula
+// decimal quando o valor não é inteiro (ex.: "10" ou "10,0" -> "10 PONTOS",
+// mas "2,5" -> "2,5 PONTOS"). Se não reconhecer como número, só normaliza
+// pra maiúsculas quando já tiver "ponto"/"pontos" no texto.
+function formatarValorProva(valorProva) {
+  const bruto = (valorProva ?? '').toString().trim();
+  if (!bruto) return bruto;
+
+  const match = bruto.match(/^(\d+(?:[.,]\d+)?)\s*(pontos?)?$/i);
+  if (match) {
+    let numero = match[1].replace(',', '.');
+    if (numero.includes('.')) {
+      numero = numero.replace(/0+$/, '').replace(/\.$/, '');
+    }
+    const textoNumero = numero.includes('.') ? numero.replace('.', ',') : numero;
+    return `${textoNumero} PONTOS`;
+  }
+
+  if (/pontos?\b/i.test(bruto)) return bruto.toUpperCase();
+  return `${bruto} PONTOS`;
+}
+
 function dadosDaProva(corpo, questoes) {
   return {
     titulo: corpo.titulo,
-    curso: corpo.curso || corpo.disciplina,
+    curso: (corpo.curso || corpo.disciplina || '').toString().toUpperCase(),
     periodo: formatarPeriodo(corpo.periodo || corpo.turma),
     data: corpo.data,
-    etapa: corpo.etapa,
+    etapa: formatarEtapa(corpo.etapa),
     aluno: corpo.aluno,
-    valorProva: corpo.valorProva,
+    valorProva: formatarValorProva(corpo.valorProva),
     aprovacaoCoordenador: formatarAprovacaoCoordenador(corpo),
     professor: corpo.professor,
     instrucoes: corpo.instrucoes,
