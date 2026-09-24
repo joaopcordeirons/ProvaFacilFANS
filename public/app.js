@@ -862,34 +862,18 @@ function renderizarFormularioEdicao(questao) {
   const caixaVerificacao = document.getElementById('edicaoVerificacao');
   configurarNegritoPorId('edicaoTexto');
 
-  // Mesmo comportamento da tela de identificação de questões: ao marcar
-  // "múltipla escolha" sem nenhuma alternativa no texto, insere um
-  // gabarito em branco pra preencher; ao marcar "dissertativa" havendo
-  // alternativas escritas, confirma antes de apagá-las (pra não sumir
-  // com conteúdo sem querer).
-  selectTipoEl.addEventListener('change', async () => {
+  // Ao marcar "múltipla escolha" sem nenhuma alternativa no texto, insere
+  // um gabarito em branco pra preencher. Ao marcar "dissertativa" não mexe
+  // no texto: várias questões dissertativas têm itens "A)"/"B)" como parte
+  // legítima do enunciado (não alternativas de múltipla escolha), então
+  // apagar essas linhas automaticamente derrubava conteúdo sem querer.
+  selectTipoEl.addEventListener('change', () => {
     const linhas = lerTextoDoCampo(textoEl).split('\n');
     const temAlternativas = linhas.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
 
     if (selectTipoEl.value === 'multipla_escolha' && !temAlternativas) {
       const textoAtual = lerTextoDoCampo(textoEl).replace(/\n+$/, '');
       escreverTextoNoCampo(textoEl, `${textoAtual}\n\nA) \nB) \nC) \nD) `);
-    } else if (selectTipoEl.value === 'dissertativa' && temAlternativas) {
-      const podeRemover = await confirmarAcao({
-        titulo: 'Remover alternativas',
-        mensagem: 'Remover as alternativas (A, B, C...) do texto desta questão?',
-        textoConfirmar: 'Remover',
-        perigo: true,
-      });
-      if (podeRemover) {
-        const semAlternativas = linhas
-          .filter((linha) => !REGEX_LINHA_ALTERNATIVA.test(linha.trim()))
-          .join('\n')
-          .replace(/\n+$/, '');
-        escreverTextoNoCampo(textoEl, semAlternativas);
-      } else {
-        selectTipoEl.value = 'multipla_escolha';
-      }
     }
   });
 
@@ -1395,37 +1379,20 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
 
     // O sistema classifica automaticamente "múltipla escolha" x
     // "dissertativa" só olhando se o texto já tem linhas "A) ...": às
-    // vezes erra (ex.: alternativas com marcador fora do padrão). O
-    // professor pode corrigir na mão trocando o seletor: ao marcar
+    // vezes erra (ex.: alternativas com marcador fora do padrão, ou uma
+    // dissertativa cujo enunciado pede pra endereçar itens "A)"/"B)").
+    // O professor pode corrigir na mão trocando o seletor: ao marcar
     // "múltipla escolha" sem nenhuma alternativa detectada, insere um
-    // gabarito em branco pra preencher; ao marcar "dissertativa" havendo
-    // alternativas escritas, confirma antes de apagá-las do texto (pra
-    // não sumir com conteúdo sem querer).
-    selectTipoEl.addEventListener('change', async () => {
+    // gabarito em branco pra preencher. Ao marcar "dissertativa" o texto
+    // não é mexido — apagar essas linhas automaticamente derrubava
+    // conteúdo legítimo de questões dissertativas com itens "A)"/"B)".
+    selectTipoEl.addEventListener('change', () => {
       const linhas = lerTextoDoCampo(textareaEl).split('\n');
       const temAlternativas = linhas.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
 
       if (selectTipoEl.value === 'multipla_escolha' && !temAlternativas) {
         const textoAtual = lerTextoDoCampo(textareaEl).replace(/\n+$/, '');
         escreverTextoNoCampo(textareaEl, `${textoAtual}\n\nA) \nB) \nC) \nD) `);
-      } else if (selectTipoEl.value === 'dissertativa' && temAlternativas) {
-        const podeRemover = await confirmarAcao({
-          titulo: 'Remover alternativas',
-          mensagem: 'Remover as alternativas (A, B, C...) do texto desta questão?',
-          textoConfirmar: 'Remover',
-          perigo: true,
-        });
-        if (podeRemover) {
-          const semAlternativas = linhas
-            .filter((linha) => !REGEX_LINHA_ALTERNATIVA.test(linha.trim()))
-            .join('\n')
-            .replace(/\n+$/, '');
-          escreverTextoNoCampo(textareaEl, semAlternativas);
-        } else {
-          // Sem apagar o texto, o tipo continua sendo múltipla escolha —
-          // desfaz a troca do seletor pra não ficar incoerente.
-          selectTipoEl.value = 'multipla_escolha';
-        }
       }
     });
 
