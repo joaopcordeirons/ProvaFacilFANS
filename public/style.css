@@ -327,6 +327,12 @@
     margin-left: 0.35rem;
     font-family: var(--sans);
   }
+  /* Dentro do card de candidata os botões já ganham espaçamento pelo
+     gap do flex container (.questao-candidata .acoes); a margem acima
+     é só pra contextos fora dele (ex.: lista de e-mails), então some
+     aqui pra não dobrar o espaço. */
+  .questao-candidata .acoes .salvar,
+  .questao-candidata .acoes .excluir { margin-left: 0; }
   .confirmacao-exclusao {
     display: inline-flex;
     align-items: center;
@@ -503,7 +509,7 @@
     font-family: var(--sans);
     font-size: 0.87rem;
   }
-  .questao-candidata .acoes { margin-top: 0.55rem; display: flex; flex-wrap: wrap; gap: 0; }
+  .questao-candidata .acoes { margin-top: 0.55rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
   .acoes button.verificar,
   .detalhe-acoes button.verificar {
     background: var(--surface);
