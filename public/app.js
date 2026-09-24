@@ -796,13 +796,25 @@ function renderizarDetalhe() {
   document.getElementById('btnRemoverQuestao').addEventListener('click', () => confirmarRemocao(questao));
 }
 
+// Mesmo padrão usado no formulário de candidatas (ao identificar
+// questões de um texto colado/importado) pra separar linhas de
+// alternativa ("A)", "B)"...) do resto do enunciado.
+const REGEX_LINHA_ALTERNATIVA = /^[A-E]\)/;
+
 function renderizarFormularioEdicao(questao) {
+  const linhasAtuais = String(questao.texto || '').split('\n');
+  const temAlternativasAgora = linhasAtuais.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
+
   painelDetalheEl.innerHTML = `
     <div class="detalhe-topo">
       <div class="detalhe-identificacao">
         <span class="codigo">${escapeHtml(questao.codigo)}</span>
         <span class="etiqueta">Editando</span>
       </div>
+      <select class="select-tipo-questao" id="edicaoTipo" title="O sistema não muda o tipo sozinho aqui: escolha múltipla escolha ou dissertativa pra ajustar as alternativas no texto">
+        <option value="multipla_escolha" ${temAlternativasAgora ? 'selected' : ''}>múltipla escolha</option>
+        <option value="dissertativa" ${temAlternativasAgora ? '' : 'selected'}>dissertativa</option>
+      </select>
     </div>
 
     <label class="campo">Enunciado (e alternativas, uma por linha)
@@ -836,13 +848,128 @@ function renderizarFormularioEdicao(questao) {
 
     <div class="detalhe-acoes">
       <button type="button" class="btn-escuro" id="btnSalvarEdicao">Salvar alterações</button>
+      <button type="button" class="verificar" id="btnVerificarEdicao">Verificar conteúdo com IA</button>
+      <button type="button" class="corrigir" id="btnCorrigirEdicao">Corrigir com IA</button>
       <button type="button" class="btn-secundario" id="btnCancelarEdicao">Cancelar</button>
     </div>
     <div class="status" id="statusDetalhe"></div>
+    <div class="verificacao-conteudo oculto" id="edicaoVerificacao"></div>
   `;
 
   const statusEl = document.getElementById('statusDetalhe');
+  const textoEl = document.getElementById('edicaoTexto');
+  const selectTipoEl = document.getElementById('edicaoTipo');
+  const caixaVerificacao = document.getElementById('edicaoVerificacao');
   configurarNegritoPorId('edicaoTexto');
+
+  // Mesmo comportamento da tela de identificação de questões: ao marcar
+  // "múltipla escolha" sem nenhuma alternativa no texto, insere um
+  // gabarito em branco pra preencher; ao marcar "dissertativa" havendo
+  // alternativas escritas, confirma antes de apagá-las (pra não sumir
+  // com conteúdo sem querer).
+  selectTipoEl.addEventListener('change', async () => {
+    const linhas = lerTextoDoCampo(textoEl).split('\n');
+    const temAlternativas = linhas.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
+
+    if (selectTipoEl.value === 'multipla_escolha' && !temAlternativas) {
+      const textoAtual = lerTextoDoCampo(textoEl).replace(/\n+$/, '');
+      escreverTextoNoCampo(textoEl, `${textoAtual}\n\nA) \nB) \nC) \nD) `);
+    } else if (selectTipoEl.value === 'dissertativa' && temAlternativas) {
+      const podeRemover = await confirmarAcao({
+        titulo: 'Remover alternativas',
+        mensagem: 'Remover as alternativas (A, B, C...) do texto desta questão?',
+        textoConfirmar: 'Remover',
+        perigo: true,
+      });
+      if (podeRemover) {
+        const semAlternativas = linhas
+          .filter((linha) => !REGEX_LINHA_ALTERNATIVA.test(linha.trim()))
+          .join('\n')
+          .replace(/\n+$/, '');
+        escreverTextoNoCampo(textoEl, semAlternativas);
+      } else {
+        selectTipoEl.value = 'multipla_escolha';
+      }
+    }
+  });
+
+  document.getElementById('btnVerificarEdicao').addEventListener('click', async (evento) => {
+    const botao = evento.target;
+    botao.disabled = true;
+    botao.textContent = 'Verificando...';
+    caixaVerificacao.classList.remove('oculto');
+    caixaVerificacao.className = 'verificacao-conteudo';
+    caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+    try {
+      const linhas = lerTextoDoCampo(textoEl).split('\n');
+      const alternativasAtuais = linhas.filter((l) => REGEX_LINHA_ALTERNATIVA.test(l.trim()));
+      const enunciadoAtual = linhas.filter((l) => !REGEX_LINHA_ALTERNATIVA.test(l.trim())).join('\n');
+      const dados = await pedirJson('/api/questoes/verificar-conteudo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+      });
+      if (!dados.disponivel) {
+        caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+        caixaVerificacao.textContent = dados.motivo || 'Verificação indisponível no momento.';
+      } else if (dados.coerente) {
+        caixaVerificacao.className = 'verificacao-conteudo ok';
+        caixaVerificacao.textContent = `O conteúdo parece coerente.${dados.observacao ? ' ' + dados.observacao : ''}`;
+      } else {
+        caixaVerificacao.className = 'verificacao-conteudo alerta';
+        caixaVerificacao.textContent = `Possível problema: ${dados.observacao || 'revise o conteúdo desta questão.'}`;
+      }
+    } catch (err) {
+      caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+      caixaVerificacao.textContent = err.message;
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Verificar conteúdo com IA';
+    }
+  });
+
+  document.getElementById('btnCorrigirEdicao').addEventListener('click', async (evento) => {
+    const botao = evento.target;
+    botao.disabled = true;
+    botao.textContent = 'Corrigindo...';
+    caixaVerificacao.classList.remove('oculto');
+    caixaVerificacao.className = 'verificacao-conteudo';
+    caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
+    try {
+      const linhas = lerTextoDoCampo(textoEl).split('\n');
+      const alternativasAtuais = linhas.filter((l) => REGEX_LINHA_ALTERNATIVA.test(l.trim()));
+      const enunciadoAtual = linhas.filter((l) => !REGEX_LINHA_ALTERNATIVA.test(l.trim())).join('\n');
+      const dados = await pedirJson('/api/questoes/corrigir-com-ia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
+      });
+      if (!dados.disponivel) {
+        caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+        caixaVerificacao.textContent = dados.motivo || 'Correção indisponível no momento.';
+      } else {
+        // Só atualiza o campo — o professor decide se salva depois de
+        // revisar. Nada é salvo automaticamente.
+        const partes = [dados.enunciado];
+        if (dados.alternativas && dados.alternativas.length) partes.push('', ...dados.alternativas);
+        escreverTextoNoCampo(textoEl, partes.join('\n').trim());
+        const possivelPerdaDeConteudo = (dados.observacao || '').toLowerCase().startsWith('[atenção]');
+        const observacaoLimpa = (dados.observacao || '').replace(/^\[atenção\]\s*/i, '');
+        caixaVerificacao.className = possivelPerdaDeConteudo
+          ? 'verificacao-conteudo alerta'
+          : 'verificacao-conteudo ok';
+        caixaVerificacao.textContent = observacaoLimpa
+          ? `${possivelPerdaDeConteudo ? '' : 'Corrigido: '}${observacaoLimpa} Revise antes de salvar.`
+          : 'A IA não encontrou nada pra corrigir aqui.';
+      }
+    } catch (err) {
+      caixaVerificacao.className = 'verificacao-conteudo indisponivel';
+      caixaVerificacao.textContent = err.message;
+    } finally {
+      botao.disabled = false;
+      botao.textContent = 'Corrigir com IA';
+    }
+  });
 
   document.getElementById('btnCancelarEdicao').addEventListener('click', () => {
     Estado.editando = false;
@@ -850,7 +977,7 @@ function renderizarFormularioEdicao(questao) {
   });
 
   document.getElementById('btnSalvarEdicao').addEventListener('click', async (evento) => {
-    const texto = lerTextoDoCampo(document.getElementById('edicaoTexto')).trim();
+    const texto = lerTextoDoCampo(textoEl).trim();
     if (!texto) {
       statusEl.textContent = 'O enunciado não pode ficar vazio.';
       statusEl.className = 'status erro';

@@ -504,17 +504,32 @@
     font-size: 0.87rem;
   }
   .questao-candidata .acoes { margin-top: 0.55rem; display: flex; flex-wrap: wrap; gap: 0; }
-  .questao-candidata .acoes button.verificar {
+  .acoes button.verificar,
+  .detalhe-acoes button.verificar {
     background: var(--surface);
     border: 1px solid var(--rule);
     color: var(--ink-muted);
   }
-  .questao-candidata .acoes button.corrigir {
+  .acoes button.corrigir,
+  .detalhe-acoes button.corrigir {
     background: var(--surface);
     border: 1px solid var(--accent);
     color: var(--accent);
   }
-  .questao-candidata .acoes button.corrigir:disabled { opacity: 0.5; cursor: not-allowed; }
+  .acoes button.corrigir:disabled,
+  .detalhe-acoes button.corrigir:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Fora do card de candidata (ex.: painel de edição), os botões de IA
+     precisam do mesmo formato dos demais botões do .detalhe-acoes. */
+  .detalhe-acoes button.verificar,
+  .detalhe-acoes button.corrigir {
+    border-radius: 6px;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.83rem;
+    font-family: var(--sans);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .detalhe-acoes button.verificar:disabled { color: var(--ink-faint); cursor: not-allowed; }
   .verificacao-conteudo {
     margin-top: 0.55rem;
     font-size: 0.82rem;
