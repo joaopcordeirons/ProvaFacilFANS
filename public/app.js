@@ -1250,7 +1250,6 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
         <button class="salvar btn-salvar-candidata">Salvar questão</button>
         <button class="verificar btn-verificar-candidata" type="button">Verificar conteúdo com IA</button>
         <button class="corrigir btn-corrigir-ia-candidata" type="button">Corrigir com IA</button>
-        <button class="corrigir btn-verificar-tipo-candidata" type="button">Verificar tipo com IA</button>
         <button class="excluir btn-descartar-candidata">Descartar</button>
       </div>
       <div class="status-inline"></div>
@@ -1386,45 +1385,6 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
       } finally {
         botao.disabled = false;
         botao.textContent = 'Corrigir com IA';
-      }
-    });
-
-    item.querySelector('.btn-verificar-tipo-candidata').addEventListener('click', async (evento) => {
-      const botao = evento.target;
-      const caixaVerificacao = item.querySelector('.verificacao-conteudo');
-      botao.disabled = true;
-      botao.textContent = 'Verificando tipo...';
-      caixaVerificacao.classList.remove('oculto');
-      caixaVerificacao.className = 'verificacao-conteudo';
-      caixaVerificacao.textContent = 'Consultando IA (Gemini)...';
-      try {
-        const linhas = lerTextoDoCampo(textareaEl).split('\n');
-        const alternativasAtuais = linhas.filter((l) => REGEX_LINHA_ALTERNATIVA.test(l.trim()));
-        const enunciadoAtual = linhas.filter((l) => !REGEX_LINHA_ALTERNATIVA.test(l.trim())).join('\n');
-        const dados = await pedirJson('/api/questoes/detectar-tipo-com-ia', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enunciado: enunciadoAtual, alternativas: alternativasAtuais }),
-        });
-        if (!dados.disponivel) {
-          caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-          caixaVerificacao.textContent = dados.motivo || 'Verificação de tipo indisponível no momento.';
-        } else {
-          // Assim como em "Corrigir com IA", só atualiza os campos — o
-          // professor decide se salva depois de revisar.
-          selectTipoEl.value = dados.tipo;
-          const partes = [dados.enunciado];
-          if (dados.alternativas && dados.alternativas.length) partes.push('', ...dados.alternativas);
-          escreverTextoNoCampo(textareaEl, partes.join('\n').trim());
-          caixaVerificacao.className = 'verificacao-conteudo ok';
-          caixaVerificacao.textContent = `A IA classificou como ${dados.tipo === 'multipla_escolha' ? 'múltipla escolha' : 'dissertativa'}.${dados.observacao ? ' ' + dados.observacao : ''} Revise antes de salvar.`;
-        }
-      } catch (err) {
-        caixaVerificacao.className = 'verificacao-conteudo indisponivel';
-        caixaVerificacao.textContent = err.message;
-      } finally {
-        botao.disabled = false;
-        botao.textContent = 'Verificar tipo com IA';
       }
     });
 

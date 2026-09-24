@@ -13,7 +13,6 @@ const { extrairTextoPdf, extrairTextoDocx, extrairTextoImagem } = require('./ext
 const { identificarQuestoes } = require('./extratorQuestoes');
 const { verificarConteudo } = require('./verificadorConteudo');
 const { corrigirComIA } = require('./corretorIA');
-const { detectarTipoComIA } = require('./classificadorTipoIA');
 const { buscarEmailsPorRemetente, excluirEmailPorUid, credenciaisConfiguradas, enviarEmailRecuperacao, enviarEmailVerificacao, notificarProvaEnviada, notificarRevisaoProva, enviarProvaPorEmail } = require('./emailService');
 const {
   criarQuestao,
@@ -501,25 +500,6 @@ app.post('/api/questoes/corrigir-com-ia', express.json({ limit: '1mb' }), async 
   } catch (err) {
     console.error('Erro ao corrigir com IA:', err.message);
     return res.status(500).json({ erro: 'Falha ao corrigir com IA.', detalhe: err.message });
-  }
-});
-
-// Reclassificação OPCIONAL do tipo (múltipla escolha x dissertativa) via
-// IA (Gemini, sob demanda — só quando o professor clica em "Verificar
-// tipo com IA", nunca automático). O tipo mostrado na tela de revisão é
-// calculado por regra (existe ou não linha "A) ..." no texto); esse
-// botão dá uma segunda opinião pra quando a regra erra. Ver
-// classificadorTipoIA.js.
-app.post('/api/questoes/detectar-tipo-com-ia', express.json({ limit: '1mb' }), async (req, res) => {
-  try {
-    const { enunciado, alternativas } = req.body || {};
-    if (typeof enunciado !== 'string' || !enunciado.trim()) {
-      return res.status(400).json({ erro: 'O campo "enunciado" é obrigatório.' });
-    }
-    return res.json(await detectarTipoComIA({ enunciado, alternativas }));
-  } catch (err) {
-    console.error('Erro ao detectar tipo com IA:', err.message);
-    return res.status(500).json({ erro: 'Falha ao detectar tipo com IA.', detalhe: err.message });
   }
 });
 
