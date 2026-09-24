@@ -804,6 +804,11 @@ const REGEX_LINHA_ALTERNATIVA = /^[A-E]\)/;
 function renderizarFormularioEdicao(questao) {
   const linhasAtuais = String(questao.texto || '').split('\n');
   const temAlternativasAgora = linhasAtuais.some((linha) => REGEX_LINHA_ALTERNATIVA.test(linha.trim()));
+  // O tipo salvo no banco manda; só cai no palpite pelo texto pra
+  // questões antigas que ainda não tinham esse campo.
+  const tipoAtual = questao.tipo === 'multipla_escolha' || questao.tipo === 'dissertativa'
+    ? questao.tipo
+    : (temAlternativasAgora ? 'multipla_escolha' : 'dissertativa');
 
   painelDetalheEl.innerHTML = `
     <div class="detalhe-topo">
@@ -811,9 +816,9 @@ function renderizarFormularioEdicao(questao) {
         <span class="codigo">${escapeHtml(questao.codigo)}</span>
         <span class="etiqueta">Editando</span>
       </div>
-      <select class="select-tipo-questao" id="edicaoTipo" title="O sistema não muda o tipo sozinho aqui: escolha múltipla escolha ou dissertativa pra ajustar as alternativas no texto">
-        <option value="multipla_escolha" ${temAlternativasAgora ? 'selected' : ''}>múltipla escolha</option>
-        <option value="dissertativa" ${temAlternativasAgora ? '' : 'selected'}>dissertativa</option>
+      <select class="select-tipo-questao" id="edicaoTipo" title="Múltipla escolha ou dissertativa — usado pra saber como tratar as alternativas no texto">
+        <option value="multipla_escolha" ${tipoAtual === 'multipla_escolha' ? 'selected' : ''}>múltipla escolha</option>
+        <option value="dissertativa" ${tipoAtual === 'dissertativa' ? 'selected' : ''}>dissertativa</option>
       </select>
     </div>
 
@@ -976,6 +981,7 @@ function renderizarFormularioEdicao(questao) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           texto,
+          tipo: selectTipoEl.value,
           assunto: document.getElementById('edicaoAssunto').value,
           valor: document.getElementById('edicaoValor').value,
           periodo: document.getElementById('edicaoPeriodo').value,
@@ -1496,6 +1502,7 @@ async function identificarErenderizarQuestoes(textoBruto, tipoOrigem, nomeArquiv
       try {
         await salvarQuestaoNoFirebase({
           texto: lerTextoDoCampo(textareaEl),
+          tipo: selectTipoEl.value,
           tipoOrigem,
           nomeArquivo,
           assunto: item.querySelector('.campo-assunto').value,

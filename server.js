@@ -416,7 +416,7 @@ function podeUsarCurso(req, curso) {
 app.post('/api/questoes', express.json(), async (req, res) => {
   try {
     const {
-      texto, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+      texto, tipo, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
       assunto, periodo, ano, valor, curso, emailMessageId, emailFonte,
     } = req.body || {};
     if (typeof texto !== 'string' || !texto.trim()) {
@@ -427,7 +427,7 @@ app.post('/api/questoes', express.json(), async (req, res) => {
     }
 
     const questao = await criarQuestao({
-      texto: texto.trim(), conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
+      texto: texto.trim(), tipo, conteudoHtml, tipoOrigem, nomeArquivo, paginas, confianca, avisos,
       assunto, periodo, ano, valor, curso, criadoPorId: req.usuarioId,
       emailMessageId, emailFonte,
     });
@@ -507,7 +507,7 @@ app.post('/api/questoes/corrigir-com-ia', express.json({ limit: '1mb' }), async 
 // enunciado, assunto, período/ano e valor em pontos.
 app.put('/api/questoes/:id', express.json({ limit: '1mb' }), async (req, res) => {
   try {
-    const { texto, conteudoHtml, assunto, periodo, ano, valor, curso } = req.body || {};
+    const { texto, tipo, conteudoHtml, assunto, periodo, ano, valor, curso } = req.body || {};
     if (texto !== undefined && (typeof texto !== 'string' || !texto.trim())) {
       return res.status(400).json({ erro: 'O campo "texto" não pode ficar vazio.' });
     }
@@ -522,7 +522,7 @@ app.put('/api/questoes/:id', express.json({ limit: '1mb' }), async (req, res) =>
     }
 
     return res.json(await atualizarQuestao(req.params.id, {
-      texto, conteudoHtml, assunto, periodo, ano, valor, curso,
+      texto, tipo, conteudoHtml, assunto, periodo, ano, valor, curso,
     }));
   } catch (err) {
     console.error('Erro ao atualizar questão:', err.message);

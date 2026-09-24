@@ -85,6 +85,25 @@ function validarPeriodo(valor) {
   return numero;
 }
 
+const TIPOS_QUESTAO_VALIDOS = ['multipla_escolha', 'dissertativa'];
+
+// Antes de existir o campo "tipo" persistido, o tipo era só deduzido do
+// texto (linhas "A) ..." indicavam múltipla escolha). Mantido aqui como
+// fallback pra questões antigas que não têm o campo salvo — nunca usado
+// pra sobrescrever um tipo que o professor já escolheu explicitamente.
+const REGEX_LINHA_ALTERNATIVA = /^[A-E]\)/m;
+function deduzirTipoPeloTexto(texto) {
+  return REGEX_LINHA_ALTERNATIVA.test(String(texto || '')) ? 'multipla_escolha' : 'dissertativa';
+}
+
+// Se vier um tipo explícito e válido, usa ele — é a escolha do professor
+// no seletor da tela, e prevalece mesmo que o texto tenha linhas "A)"/"B)"
+// que não sejam alternativas de múltipla escolha (ex.: itens de uma
+// dissertativa). Sem tipo explícito, cai no fallback pelo texto.
+function validarTipo(tipo, texto) {
+  return TIPOS_QUESTAO_VALIDOS.includes(tipo) ? tipo : deduzirTipoPeloTexto(texto);
+}
+
 function normalizarMetadados(dados = {}) {
   const valor = Number(dados.valor);
   const ano = Number.parseInt(dados.ano, 10);
@@ -105,6 +124,7 @@ async function criarQuestao(dados) {
   const agora = admin.firestore.FieldValue.serverTimestamp();
   const referencia = await banco.collection('questoes').add({
     texto: dados.texto,
+    tipo: validarTipo(dados.tipo, dados.texto),
     conteudoHtml: sanitizarHtml(dados.conteudoHtml || ''),
     curso,
     periodo,
@@ -195,6 +215,10 @@ function formatarQuestao(doc) {
     id: doc.id,
     ...dados,
     ...normalizarMetadados(dados),
+    // Questões salvas antes do campo "tipo" existir não têm esse dado —
+    // cai no fallback pelo texto só pra essas, nunca sobrescreve um tipo
+    // já persistido.
+    tipo: TIPOS_QUESTAO_VALIDOS.includes(dados.tipo) ? dados.tipo : deduzirTipoPeloTexto(dados.texto),
     curso: CURSOS_VALIDOS.includes(dados.curso) ? dados.curso : null,
     periodo: PERIODOS_VALIDOS.includes(dados.periodo) ? dados.periodo : null,
     usadaEm: Number.isFinite(dados.usadaEm) ? dados.usadaEm : 0,
@@ -238,6 +262,12 @@ async function atualizarQuestao(id, dados) {
   if (dados.periodo !== undefined) atualizacao.periodo = validarPeriodo(dados.periodo);
   if (typeof dados.texto === 'string' && dados.texto.trim()) {
     atualizacao.texto = dados.texto.trim();
+  }
+  // O tipo é a escolha explícita do professor no seletor — só grava
+  // quando ele veio na requisição, e usa o texto já atualizado (se
+  // houver) como fallback pra validação, nunca o texto antigo salvo.
+  if (dados.tipo !== undefined) {
+    atualizacao.tipo = validarTipo(dados.tipo, atualizacao.texto ?? documento.data().texto);
   }
   if (typeof dados.conteudoHtml === 'string') {
     atualizacao.conteudoHtml = sanitizarHtml(dados.conteudoHtml);
