@@ -148,6 +148,15 @@ function escreverTexto(doc, texto, fontePrincipal, x, y, opcoes) {
  * Como escreverTexto, mas interpretando trechos **assim** (marcados pelo
  * professor no botão "Negrito" da tela de edição) e desenhando-os com
  * `fonteNegrito` em vez de `fonteNormal`, encadeados na mesma linha.
+ *
+ * O texto pode ter várias linhas (\n) — por exemplo, uma dissertativa cujo
+ * enunciado tem itens "A)"/"B)" em linhas próprias, com essas letras em
+ * negrito. O pdfkit só entende \n como quebra de linha de verdade quando a
+ * chamada NÃO está em modo "continued"; encadear os trechos em negrito com
+ * continued:true de ponta a ponta (ignorando onde as linhas terminam)
+ * engolia essas quebras. Por isso separamos por linha primeiro, e só
+ * encadeamos continued:true entre os trechos de negrito de uma mesma
+ * linha — nunca de uma linha para a próxima.
  */
 function escreverTextoComNegrito(doc, texto, fonteNormal, fonteNegrito, x, y, opcoes) {
   let posX = x;
@@ -160,17 +169,28 @@ function escreverTextoComNegrito(doc, texto, fonteNormal, fonteNegrito, x, y, op
   }
   opcoesBase = opcoesBase || {};
 
-  const partes = dividirNegrito(texto);
-  partes.forEach((parte, indice) => {
-    const primeiro = indice === 0;
-    const ultimo = indice === partes.length - 1;
-    const fonte = parte.negrito ? fonteNegrito : fonteNormal;
-    const opcoesParte = { ...opcoesBase, continued: !ultimo || opcoesBase.continued };
-    if (primeiro && posX !== undefined) {
-      escreverTexto(doc, parte.texto, fonte, posX, posY, opcoesParte);
-    } else {
-      escreverTexto(doc, parte.texto, fonte, opcoesParte);
-    }
+  const linhas = String(texto).split('\n');
+  linhas.forEach((linhaTexto, indiceLinha) => {
+    const primeiraLinha = indiceLinha === 0;
+    const partes = dividirNegrito(linhaTexto);
+    partes.forEach((parte, indice) => {
+      const primeiraParte = indice === 0;
+      const ultimaParte = indice === partes.length - 1;
+      const fonte = parte.negrito ? fonteNegrito : fonteNormal;
+      // Só a última parte da última linha herda o "continued" pedido por
+      // quem chamou (ex.: pra emendar na letra da alternativa seguinte);
+      // entre linhas, nunca — é isso que preserva a quebra.
+      const ultimaLinha = indiceLinha === linhas.length - 1;
+      const opcoesParte = {
+        ...opcoesBase,
+        continued: !ultimaParte || (ultimaLinha && opcoesBase.continued),
+      };
+      if (primeiraParte && primeiraLinha && posX !== undefined) {
+        escreverTexto(doc, parte.texto, fonte, posX, posY, opcoesParte);
+      } else {
+        escreverTexto(doc, parte.texto, fonte, opcoesParte);
+      }
+    });
   });
 }
 
