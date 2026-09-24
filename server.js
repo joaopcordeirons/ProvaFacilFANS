@@ -604,6 +604,7 @@ function dadosDaProva(corpo, questoes) {
     linhasResposta: corpo.linhasResposta,
     questoes: questoes.map((questao) => ({
       texto: questao.texto,
+      tipo: questao.tipo,
       valor: questao.valor,
       ano: questao.ano,
       banca: questao.banca,
@@ -708,6 +709,7 @@ function dadosParaRegistro(corpo, questoes, req) {
     questoesSnapshot: questoes.map((questao) => ({
       id: questao.id,
       texto: questao.texto || '',
+      tipo: questao.tipo,
       conteudoHtml: questao.conteudoHtml || '',
       assunto: questao.assunto || 'Outros',
       curso: questao.curso || null,

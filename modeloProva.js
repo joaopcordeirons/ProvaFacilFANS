@@ -79,14 +79,24 @@ function dividirNegrito(texto) {
   return partes.length ? partes : [{ texto: bruto, negrito: false }];
 }
 
-/** Separa o texto salvo da questão em enunciado e alternativas. */
-function separarQuestao(texto) {
+/**
+ * Separa o texto salvo da questão em enunciado e alternativas.
+ *
+ * Questões dissertativas podem legitimamente ter linhas "A) ..."/"B) ..."
+ * como parte do enunciado (ex.: itens que o aluno deve endereçar na
+ * resposta) sem serem alternativas de múltipla escolha — ver o mesmo
+ * cuidado em public/app.js. Por isso o tipo escolhido pelo professor
+ * manda: só extraímos alternativas quando a questão é, de fato,
+ * 'multipla_escolha'. Sem tipo informado (questões antigas), cai no
+ * comportamento anterior de deduzir pelo texto.
+ */
+function separarQuestao(texto, tipo) {
   const linhas = String(texto || '').split('\n');
   const enunciado = [];
   const alternativas = [];
 
   linhas.forEach((linha) => {
-    const casamento = linha.match(REGEX_ALTERNATIVA);
+    const casamento = tipo !== 'dissertativa' ? linha.match(REGEX_ALTERNATIVA) : null;
     if (casamento) {
       alternativas.push({ letra: casamento[1].toLowerCase(), texto: casamento[2].trim() });
     } else if (linha.trim()) {
@@ -121,7 +131,7 @@ function prepararProva(prova) {
   }
 
   const questoes = prova.questoes.map((questao) => ({
-    ...separarQuestao(questao.texto),
+    ...separarQuestao(questao.texto, questao.tipo),
     valor: questao.valor,
     referencia: referenciaDaQuestao(questao),
   }));
