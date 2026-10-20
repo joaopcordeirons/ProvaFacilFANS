@@ -64,6 +64,18 @@ const { CURSOS_VALIDOS, PERIODOS_VALIDOS } = require('./constantes');
 const app = express();
 const PORT = process.env.PORT || 80;
 
+// CORS: permite o app Flutter rodando no navegador (outra origem, ex.:
+// http://localhost:XXXX) chamar a API. A autenticação do app vai no cabeçalho
+// Authorization (não em cookie), então não precisa liberar credenciais.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
+  res.setHeader('Access-Control-Expose-Headers', 'X-Prova-Id, Content-Disposition');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  return next();
+});
+
 app.use(cookieParser());
 
 // A raiz do app (a SPA em public/index.html) exige sessão válida — sem
@@ -212,7 +224,9 @@ app.post('/api/auth/login', express.json({ limit: '10kb' }), async (req, res) =>
 
     const token = gerarToken(usuario, Boolean(lembrarConectado));
     definirCookieSessao(req, res, token, Boolean(lembrarConectado));
-    return res.json({ usuario });
+    // O token também vai no corpo para o app Flutter (que o reenvia em
+    // "Authorization: Bearer", já que o navegador não deixa ler/enviar cookie).
+    return res.json({ usuario, token });
   } catch (err) {
     console.error('Erro ao fazer login:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });
@@ -278,7 +292,7 @@ app.post('/api/auth/entrada-direta', express.json({ limit: '2kb' }), async (req,
     const usuario = await entradaDireta(perfil);
     const token = gerarToken(usuario, false);
     definirCookieSessao(req, res, token, false);
-    return res.json({ usuario });
+    return res.json({ usuario, token });
   } catch (err) {
     console.error('Erro na entrada direta:', err.message);
     return res.status(err.statusCode || 500).json({ erro: err.message });

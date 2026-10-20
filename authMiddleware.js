@@ -54,7 +54,14 @@ function limparCookieSessao(req, res) {
   });
 }
 
+// O token pode vir no cabeçalho "Authorization: Bearer <token>" (app Flutter,
+// Android e navegador) ou no cookie httpOnly (site em public/).
 function lerToken(req) {
+  const auth = req.headers.authorization;
+  if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
+    const token = auth.slice(7).trim();
+    if (token) return token;
+  }
   return req.cookies ? req.cookies[NOME_COOKIE] : null;
 }
 
