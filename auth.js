@@ -393,8 +393,45 @@ async function excluirUsuario(id) {
   return { ok: true };
 }
 
+// MODO SEM LOGIN (temporário, só com SEM_LOGIN=true): devolve a conta fixa
+// de "acesso direto" do perfil pedido, criando-a na primeira vez. A conta
+// tem e-mail já confirmado, senha aleatória (ninguém consegue logar com
+// ela pelo formulário) e notificações desligadas (o e-mail é fictício).
+async function entradaDireta(perfil) {
+  validarPerfil(perfil);
+  const rotulos = { professor: 'Professor', direcao: 'Direção', repografia: 'Repografia' };
+  const email = `acesso.direto.${perfil}@fans.local`;
+
+  const existente = await buscarUsuarioPorEmailBruto(email);
+  if (existente) return formatarUsuarioPublico(existente);
+
+  const banco = exigirFirestore();
+  const agora = admin.firestore.FieldValue.serverTimestamp();
+  const senhaHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), CUSTO_HASH);
+  const referencia = await banco.collection('usuarios').add({
+    nome: `${rotulos[perfil]} (acesso direto)`,
+    email,
+    senhaHash,
+    perfil,
+    instituicao: '',
+    cargo: '',
+    cursos: perfil === 'professor' ? [...CURSOS_VALIDOS] : [],
+    notificacoesEmail: false,
+    idioma: 'pt-BR',
+    emailVerificado: true,
+    tokenVerificacaoHash: null,
+    tokenVerificacaoExpira: null,
+    tokenRecuperacaoHash: null,
+    tokenRecuperacaoExpira: null,
+    criadoEm: agora,
+    atualizadoEm: agora,
+  });
+  return formatarUsuarioPublico(await referencia.get());
+}
+
 module.exports = {
   criarUsuario,
+  entradaDireta,
   autenticar,
   buscarUsuarioPorId,
   listarEmailsDirecao,

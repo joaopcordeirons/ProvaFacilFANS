@@ -35,6 +35,7 @@ const {
 } = require('./firebase');
 const {
   criarUsuario,
+  entradaDireta,
   autenticar,
   buscarUsuarioPorId,
   listarEmailsDirecao,
@@ -253,6 +254,34 @@ app.post('/api/auth/reenviar-verificacao', express.json({ limit: '5kb' }), async
   } catch (err) {
     console.error('Erro ao reenviar verificação:', err.message);
     return res.json(MENSAGEM_GENERICA);
+  }
+});
+
+// MODO SEM LOGIN (TEMPORÁRIO). Só existe quando SEM_LOGIN=true E há uma
+// SEM_LOGIN_CHAVE definida; fora disso responde 404 como se a rota não
+// existisse. Quem manda a chave certa e um perfil recebe o mesmo cookie de
+// sessão do login normal, então todo o resto do servidor (perfis,
+// permissões, PDF/DOCX) funciona sem alteração. Para voltar ao login
+// normal, apague SEM_LOGIN na Vercel e faça redeploy.
+app.post('/api/auth/entrada-direta', express.json({ limit: '2kb' }), async (req, res) => {
+  const chaveEsperada = process.env.SEM_LOGIN_CHAVE;
+  if (process.env.SEM_LOGIN !== 'true' || !chaveEsperada) {
+    return res.status(404).json({ erro: 'Não encontrado.' });
+  }
+  try {
+    const { chave, perfil } = req.body || {};
+    const a = Buffer.from(String(chave || ''));
+    const b = Buffer.from(chaveEsperada);
+    if (a.length !== b.length || !require('crypto').timingSafeEqual(a, b)) {
+      return res.status(403).json({ erro: 'Chave de acesso direto inválida.' });
+    }
+    const usuario = await entradaDireta(perfil);
+    const token = gerarToken(usuario, false);
+    definirCookieSessao(req, res, token, false);
+    return res.json({ usuario });
+  } catch (err) {
+    console.error('Erro na entrada direta:', err.message);
+    return res.status(err.statusCode || 500).json({ erro: err.message });
   }
 });
 
